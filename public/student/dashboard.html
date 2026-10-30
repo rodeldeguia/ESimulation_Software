@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Dashboard — SSEGL</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* Dashboard-specific styles (extends the shared style.css) */
+    .dashboard {
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 700px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    }
+    .dashboard h1 { color: #0f172a; margin-bottom: 8px; }
+    .dashboard .subtitle { color: #64748b; margin-bottom: 24px; }
+    .info-box {
+      background: #f1f5f9;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .info-box strong { color: #1e3a8a; }
+    .btn-logout {
+      background: #dc2626;
+      margin-top: 24px;
+    }
+    .btn-logout:hover { background: #b91c1c; }
+    #loading { text-align: center; color: #64748b; padding: 40px 0; }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard">
+    <div id="loading">Loading...</div>
+
+    <div id="content" style="display:none;">
+      <h1>Welcome, <span id="userName"></span>!</h1>
+      <p class="subtitle">You are logged in as a <strong>student</strong>.</p>
+
+      <div class="info-box">
+        <strong>Username:</strong> <span id="userUsername"></span>
+      </div>
+      <div class="info-box">
+        <strong>Grade Level:</strong> Grade <span id="userGrade"></span>
+      </div>
+      <div class="info-box">
+        <strong>Student ID:</strong> <span id="userId"></span>
+      </div>
+
+      <p style="color:#64748b; font-size:13px; margin-top:24px;">
+        (Lessons and quizzes will appear here in the next phases.)
+      </p>
+
+      <button class="btn-logout" id="logoutBtn">Log Out</button>
+    </div>
+  </div>
+
+  <script src="/student/dashboard.js"></script>
+</body>
+</html>

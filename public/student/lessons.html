@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lessons — SSEGL</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { display: block; padding: 40px 20px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    .header { color: white; margin-bottom: 24px; }
+    .header h1 { font-size: 28px; }
+    .header a { color: #93c5fd; text-decoration: none; }
+    .lesson-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .lesson-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    .lesson-card h3 { color: #1e3a8a; margin-bottom: 4px; }
+    .lesson-card p { color: #64748b; font-size: 13px; }
+    .arrow { color: #1e3a8a; font-size: 20px; }
+    .empty { color: white; text-align: center; padding: 40px; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header">
+      <h1>Your Lessons</h1>
+      <a href="/student/dashboard.html">← Back to Dashboard</a>
+    </div>
+
+    <div id="lessonsList"></div>
+  </div>
+
+  <script src="/student/lessons.js"></script>
+</body>
+</html>
