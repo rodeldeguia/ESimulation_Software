@@ -2,6 +2,7 @@ const Quiz = require('../models/quizModel');
 const PrepQ = require('../models/prepositionQuizModel');
 const Session = require('../models/sessionModel');
 const Answer = require('../models/answerModel');
+const Progress = require('../models/progressModel');
 
 exports.getForStudent = async (req,res) => {
 
@@ -139,6 +140,37 @@ exports.submit = async (req,res) => {
             time_taken: time_taken || 0,
             answered_questions: answers.length
         });
+
+
+            // Update lesson progress
+        await Progress.ensureExists({
+            student_id: req.user.id,
+            lesson_id: quiz.lesson_id,
+            initial_status: 'reading_required',
+            final_available: true
+        });
+        //this is wre i stoped
+        if (passed) {
+            await Progress.markPassed({student_id: req.user.id,lesson_id: quiz.lesson_id,score: roundedPercentage
+        });
+
+        } else {
+        await Progress.markFailed({student_id: req.user.id, lesson_id: quiz.lesson_id,score: roundedPercentage
+        });
+
+    if (passed) {
+      await Progress.markPassed({
+        student_id: req.user.id,
+        lesson_id: quiz.lesson_id,
+        score: roundedPercentage
+      });
+    } else {
+      await Progress.markFailed({
+        student_id: req.user.id,
+        lesson_id: quiz.lesson_id,
+        score: roundedPercentage
+      });
+    }
 
         res.json({
             quiz_id : quiz.quiz_id,
