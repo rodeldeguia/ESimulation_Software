@@ -149,28 +149,15 @@ exports.submit = async (req,res) => {
             initial_status: 'reading_required',
             final_available: true
         });
-        //this is wre i stoped
+
         if (passed) {
             await Progress.markPassed({student_id: req.user.id,lesson_id: quiz.lesson_id,score: roundedPercentage
         });
 
         } else {
-        await Progress.markFailed({student_id: req.user.id, lesson_id: quiz.lesson_id,score: roundedPercentage
-        });
+            await Progress.markFailed({student_id: req.user.id, lesson_id: quiz.lesson_id,score: roundedPercentage});
+        }
 
-    if (passed) {
-      await Progress.markPassed({
-        student_id: req.user.id,
-        lesson_id: quiz.lesson_id,
-        score: roundedPercentage
-      });
-    } else {
-      await Progress.markFailed({
-        student_id: req.user.id,
-        lesson_id: quiz.lesson_id,
-        score: roundedPercentage
-      });
-    }
 
         res.json({
             quiz_id : quiz.quiz_id,
@@ -191,4 +178,5 @@ exports.submit = async (req,res) => {
         res.status(500).json({error : 'Server Error'})
         
     };
+    
 }

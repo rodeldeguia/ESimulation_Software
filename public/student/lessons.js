@@ -26,7 +26,21 @@ async function loadLessons() {
       return;
     }
 
-    container.innerHTML = lessons.map(lesson => `
+    container.innerHTML = lessons.map(lesson => {
+
+      if (lesson.locked) {
+        return `
+          <div class="lesson-card" style="opacity:0.5; cursor:not-allowed;">
+            <div>
+              <h3>🔒 ${escapeHtml(lesson.title)}</h3>
+              <p>Complete the previous lesson to unlock.</p>
+            </div>
+            <span class="arrow">🔒</span>
+          </div>
+        `;
+      }
+      
+      return `
       <div class="lesson-card" onclick="window.location.href='/student/lesson.html?id=${lesson.lesson_id}'">
         <div>
           <h3>${escapeHtml(lesson.title)}</h3>
@@ -34,7 +48,7 @@ async function loadLessons() {
         </div>
         <span class="arrow">→</span>
       </div>
-    `).join('');
+    `}).join('');
 
   } catch (err) {
     console.error('loadLessons error:', err);
