@@ -2,6 +2,7 @@ const Quiz = require('../models/quizModel');
 const PrepQ = require('../models/prepositionQuizModel');
 const Session = require('../models/sessionModel');
 const Answer = require('../models/answerModel');
+const Progress = require('../models/progressModel');
 
 exports.getForStudent = async (req,res) => {
 
@@ -140,6 +141,24 @@ exports.submit = async (req,res) => {
             answered_questions: answers.length
         });
 
+
+            // Update lesson progress
+        await Progress.ensureExists({
+            student_id: req.user.id,
+            lesson_id: quiz.lesson_id,
+            initial_status: 'reading_required',
+            final_available: true
+        });
+
+        if (passed) {
+            await Progress.markPassed({student_id: req.user.id,lesson_id: quiz.lesson_id,score: roundedPercentage
+        });
+
+        } else {
+            await Progress.markFailed({student_id: req.user.id, lesson_id: quiz.lesson_id,score: roundedPercentage});
+        }
+
+
         res.json({
             quiz_id : quiz.quiz_id,
             title : quiz.title,
@@ -159,4 +178,5 @@ exports.submit = async (req,res) => {
         res.status(500).json({error : 'Server Error'})
         
     };
+    
 }

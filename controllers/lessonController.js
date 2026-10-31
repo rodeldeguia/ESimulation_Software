@@ -1,5 +1,6 @@
 const Lesson = require('../models/lessonModel');
 const Quiz = require('../models/quizModel');
+const Progress = require('../models/progressModel');
 
 exports.list = async (req,res) =>{
     try {
@@ -8,6 +9,14 @@ exports.list = async (req,res) =>{
         if (req.user.role === 'student'){
             const grade = req.query.grade || '7';
             lessons = await Lesson.findByGrade(grade);
+
+            // each lesson add a locked flag
+            for (const lesson of lessons){
+                const unlocked = await Progress.isPrerequisitePassed(req.user.id, lesson.prerequisite_lesson_id);
+                lesson.locked = !unlocked;
+            }
+
+
         }else{
 
             lessons = await Lesson.findAll();
@@ -26,6 +35,27 @@ exports.getOne = async (req,res) => {
 
         const lesson = await Lesson.findById(req.params.id);
         if(!lesson) return res.status(404).json({error : 'lesson not found'});
+        
+
+        // check if the prerequesite lesson is passed
+        if(req.user.role === 'student'){
+            const unlocked = await Progress.isPrerequisitePassed(req.user.id, lesson.prerequisite_lesson_id);
+        
+
+            if (!unlocked) {
+                return res.status(403).json({ error: 'This lesson is locked. Complete the previous lesson first.' });
+                }
+
+            //  Ensure a progress row exists for this lesson
+            await Progress.ensureExists({
+                student_id: req.user.id,
+                lesson_id: lesson.lesson_id,
+                initial_status: 'reading_required',
+                final_available: true
+            });
+        
+        }
+
         res.json(lesson);
 
     } catch (error){

@@ -28,6 +28,17 @@ async function loadLesson() {
       return;
     }
 
+    if (res.status === 403) {
+      document.getElementById('lessonContent').innerHTML = `
+        <div style="text-align:center; padding:40px;">
+          <h1>🔒 Lesson Locked</h1>
+          <p>You need to pass the previous lesson's quiz first.</p>
+          <a href="/student/lessons.html" style="color:#1e3a8a;">← Back to Lessons</a>
+        </div>
+      `;
+      return;
+    }
+
     let quizSection = '';
     try {
       const quizRes = await fetch(`/api/lessons/${lessonId}/quizzes`, {
