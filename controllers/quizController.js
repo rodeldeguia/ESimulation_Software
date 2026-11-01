@@ -4,6 +4,7 @@ const Session = require('../models/sessionModel');
 const Answer = require('../models/answerModel');
 const Progress = require('../models/progressModel');
 const IrregularVerbQuiz = require('../models/irregularVerbQuizModel');
+const ClauseQuiz = require('../models/clauseQiuzModel');
 
 exports.getForStudent = async (req,res) => {
 
@@ -38,6 +39,21 @@ exports.getForStudent = async (req,res) => {
                 present_form: q.present_form,
                 ask_for: q.ask_for
         }));
+        } else if (quiz.quiz_type === 'clause') {
+            questions = await ClauseQuiz.findByQuiz(quiz.quiz_id);
+            safeQuestions = questions.map(q => ({
+                question_id: q.question_id,
+                question_type: 'two_step_choice',
+                question_text: q.question_text,
+                instructions: q.instructions,
+                hint: q.hint,
+                points: q.points,
+                sentence: q.sentence,           // extra context
+                // clause_text: q.clause_text,     // extra context
+                // clause_type: q.clause_type,     // extra context
+                options: q.options
+            }));
+            
         } else {
             return res.status(400).json({ error: `Quiz type "${quiz.quiz_type}" not yet supported` });
         }
@@ -90,7 +106,9 @@ exports.submit = async (req,res) => {
             questions = await PrepositionQuiz.findByQuiz(quiz.quiz_id);
         } else if (quiz.quiz_type === 'irregular_verb') {
             questions = await IrregularVerbQuiz.findByQuiz(quiz.quiz_id);
-        } else {
+        } else if (quiz.quiz_type === 'clause') {
+            questions = await ClauseQuiz.findByQuiz(quiz.quiz_id);
+        }else {
             return res.status(400).json({ error: 'Quiz type not yet supported' });
         }
 
@@ -146,7 +164,23 @@ exports.submit = async (req,res) => {
 
                 isCorrect = studentText === correctText || alternatives.includes(studentText);
                 studentAnswerJSON = { text: answer.text || '' };
-            }
+
+            } else if (quiz.quiz_type === 'clause') {
+                // isCorrect = Number(answer.selected_index) === q.correct_option_index;
+                // studentAnswerJSON = { selected_index: Number(answer.selected_index) };
+                const clauseCorrect = Number(answer.selected_index) === q.correct_option_index;
+                const selectedType = String(answer.selected_type || '').trim().toLowerCase();
+                const correctType = String(q.clause_type || '').trim().toLowerCase();
+                const typeCorrect = selectedType === correctType;
+
+                // All-or-nothing
+                isCorrect = clauseCorrect && typeCorrect;
+
+                studentAnswerJSON = {
+                    selected_index: Number(answer.selected_index),
+                    selected_type: answer.selected_type || ''
+                };
+                }
 
             if (isCorrect) correctCount ++;
 
@@ -181,12 +215,25 @@ exports.submit = async (req,res) => {
                     correct_index: q.correct_option_index,
                     correct_answer: q.correct_answer
                     } : {}),
+
                     ...(quiz.quiz_type === 'irregular_verb' ? {
                     selected_answer: answer.text || '(none)',
                     correct_answer: q.correct_answer,
                     present_form: q.present_form,
                     ask_for: q.ask_for
-                    } : {})
+                    } : {}),
+
+                    ...(quiz.quiz_type === 'clause' ? {
+                    selected_index: Number(answer.selected_index),
+                    selected_answer: q.options[answer.selected_index] || null,
+                    correct_index: q.correct_option_index,
+                    correct_answer: q.options[q.correct_option_index],
+                    selected_type: answer.selected_type || null,
+                    correct_type: q.clause_type,
+                    clause_correct: Number(answer.selected_index) === q.correct_option_index,
+                    type_correct: String(answer.selected_type || '').trim().toLowerCase() === String(q.clause_type || '').trim().toLowerCase(),
+                    sentence: q.sentence
+                    } : {}),
             });
         }
 
