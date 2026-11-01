@@ -95,10 +95,10 @@ exports.create = async(req,res) => {
             prerequisite_lesson_id,
             passing_score,
             max_quiz_attempts,
-            is_published
+            is_published : 0
         });
 
-        res.status(201).json({message : 'Lesson created successfully', lesson: newlesson});
+        res.status(201).json({message : 'Lesson created as draft. Waiting for admin approval', lesson: newlesson});
 
     } catch (error) {
         console.error('Lesson create Error:',error);

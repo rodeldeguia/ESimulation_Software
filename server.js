@@ -10,6 +10,7 @@ const lessonRouter = require('./routes/lesson');
 const quizRouter = require('./routes/quizzes');
 const analyticsRouter = require('./routes/analytics')
 const teacherAnalyticsRouter = require('./routes/teacherAnalytics');
+const adminRouter = require('./routes/admin');
 
 
 
@@ -30,6 +31,7 @@ app.use('/api/lessons', lessonRouter);
 app.use('/api/quizzes', quizRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/teacher-analytics', teacherAnalyticsRouter);
+app.use('/api/admin', adminRouter);
 
 
 

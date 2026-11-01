@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Activity Logs — SSEGL</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { display: block; padding: 0; background: #f1f5f9; }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 240px; background: #0f172a; color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-header { padding: 24px 20px; font-weight: 700; font-size: 18px; border-bottom: 1px solid #1e293b; color: #93c5fd; }
+    .nav-links { padding: 20px 12px; flex-grow: 1; }
+    .nav-links a { display: block; padding: 12px 16px; color: #cbd5e1; text-decoration: none; border-radius: 6px; margin-bottom: 4px; font-size: 14px; }
+    .nav-links a:hover { background: #1e293b; color: white; }
+    .nav-links a.active { background: #1e3a8a; color: white; font-weight: 600; }
+    .logout-btn { color: #f87171 !important; margin-top: auto; padding-bottom: 24px; }
+
+    .main-content { flex-grow: 1; padding: 32px; overflow-y: auto; }
+    .page-header { margin-bottom: 24px; }
+    .page-header h1 { color: #0f172a; font-size: 28px; }
+
+    .log-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+    .log-table th { background: #f8fafc; padding: 16px; text-align: left; font-size: 12px; color: #64748b; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
+    .log-table td { padding: 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #0f172a; }
+    .log-table tr:last-child td { border-bottom: none; }
+    
+    .action-badge { background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">Admin Panel</div>
+      <div class="nav-links">
+        <a href="/admin/dashboard.html">📊 Dashboard</a>
+        <a href="/admin/teachers.html">👨‍🏫 Manage Teachers</a>
+        <a href="/admin/students.html">👨‍🎓 Manage Students</a>
+        <a href="/admin/approvals.html">✅ Lesson Approval</a>
+        <a href="/admin/logs.html" class="active">📜 Activity Logs</a>
+        <a href="#" class="logout-btn" id="logoutBtn">🚪 Log Out</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>System Activity Logs</h1>
+      </div>
+      
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Actor</th>
+            <th>Action</th>
+            <th>Target</th>
+            <th>IP</th>
+          </tr>
+        </thead>
+        <tbody id="logList">
+          <tr><td colspan="5" style="text-align:center;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </main>
+  </div>
+
+  <script src="/admin/logs.js"></script>
+</body>
+</html>
