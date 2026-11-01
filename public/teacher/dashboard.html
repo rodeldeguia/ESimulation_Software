@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Dashboard — SSEGL</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { display: block; padding: 24px; }
+    .layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 24px;
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+    .sidebar {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      height: fit-content;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    .sidebar h2 {
+      font-size: 16px;
+      color: #1e3a8a;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .sidebar a {
+      display: block;
+      padding: 10px 12px;
+      color: #334155;
+      text-decoration: none;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+    .sidebar a:hover { background: #f1f5f9; }
+    .sidebar a.active { background: #1e3a8a; color: white; }
+    .sidebar .logout {
+      color: #dc2626;
+      margin-top: 20px;
+    }
+
+    .main { display: flex; flex-direction: column; gap: 20px; }
+    .main h1 { color: white; font-size: 26px; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .stat {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    .stat .num {
+      font-size: 32px;
+      font-weight: 800;
+      color: #1e3a8a;
+      margin-bottom: 4px;
+    }
+    .stat .label {
+      font-size: 12px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .students-panel {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    .students-panel h2 {
+      color: #0f172a;
+      margin-bottom: 16px;
+      font-size: 18px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th {
+      text-align: left;
+      padding: 12px 8px;
+      border-bottom: 2px solid #e2e8f0;
+      color: #475569;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td {
+      padding: 12px 8px;
+      border-bottom: 1px solid #f1f5f9;
+      color: #0f172a;
+    }
+    td a {
+      color: #1e3a8a;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    td a:hover { text-decoration: underline; }
+    .status-active { color: #16a34a; font-weight: 600; }
+    .status-inactive { color: #dc2626; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <h2>English Grammar Lessons</h2>
+      <a href="/teacher/dashboard.html" class="active">Dashboard</a>
+      <a href="/teacher/students.html">Students</a>
+      <a href="/teacher/lessons.html">Lessons</a>
+      <a href="/teacher/create-lesson.html">Create Lesson</a>
+      <a href="/teacher/progress.html">Progress</a>
+      <a href="#" class="logout" id="logoutBtn">Log Out</a>
+    </aside>
+
+    <main class="main">
+      <h1>Dashboard</h1>
+
+      <div class="stats-grid" id="stats"></div>
+
+      <div class="students-panel">
+        <h2>Your Students</h2>
+        <div id="studentsTable">Loading...</div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/teacher/dashboard.js"></script>
+</body>
+</html>
