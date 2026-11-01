@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Progress — SSEGL</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { display: block; padding: 40px 20px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    .header { color: white; margin-bottom: 24px; }
+    .header h1 { font-size: 28px; }
+    .header a { color: #93c5fd; text-decoration: none; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    .stat-card .number {
+      font-size: 36px;
+      font-weight: 800;
+      color: #1e3a8a;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .stat-card .label {
+      font-size: 13px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .lesson-list {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+    .lesson-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .lesson-item:last-child { border-bottom: none; }
+
+    .lesson-info h3 { color: #0f172a; font-size: 16px; margin-bottom: 4px; }
+    .lesson-info p { color: #64748b; font-size: 13px; }
+
+    .lesson-meta {
+      text-align: right;
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+    .score {
+      font-size: 24px;
+      font-weight: 700;
+      min-width: 60px;
+    }
+    .score.pass { color: #16a34a; }
+    .score.fail { color: #dc2626; }
+    .score.none { color: #cbd5e1; }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge.passed   { background: #dcfce7; color: #166534; }
+    .badge.failed   { background: #fee2e2; color: #991b1b; }
+    .badge.available{ background: #dbeafe; color: #1e40af; }
+    .badge.locked   { background: #f1f5f9; color: #64748b; }
+    .badge.reading_required { background: #fef3c7; color: #92400e; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header">
+      <h1>My Progress</h1>
+      <a href="/student/dashboard.html">← Back to Dashboard</a>
+    </div>
+
+    <div class="summary" id="summary"></div>
+    <div class="lesson-list" id="lessonList">Loading...</div>
+  </div>
+
+  <script src="/student/progress.js"></script>
+</body>
+</html>
