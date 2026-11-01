@@ -9,6 +9,7 @@ const authRouter = require('./routes/auth');
 const lessonRouter = require('./routes/lesson');
 const quizRouter = require('./routes/quizzes');
 const analyticsRouter = require('./routes/analytics')
+const teacherAnalyticsRouter = require('./routes/teacherAnalytics');
 
 
 
@@ -27,7 +28,8 @@ app.use(express.static('public'))
 app.use('/api/auth',authRouter);
 app.use('/api/lessons', lessonRouter);
 app.use('/api/quizzes', quizRouter);
-app.use('/api/analytics', analyticsRouter)
+app.use('/api/analytics', analyticsRouter);
+app.use('/api/teacher-analytics', teacherAnalyticsRouter);
 
 
 
