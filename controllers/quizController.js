@@ -1,31 +1,46 @@
 const Quiz = require('../models/quizModel');
-const PrepQ = require('../models/prepositionQuizModel');
+const PrepositionQuiz = require('../models/prepositionQuizModel');
 const Session = require('../models/sessionModel');
 const Answer = require('../models/answerModel');
 const Progress = require('../models/progressModel');
+const IrregularVerbQuiz = require('../models/irregularVerbQuizModel');
 
 exports.getForStudent = async (req,res) => {
 
     try {
         
+         let safeQuestions = [];
+        let questions = [];
         const quiz = await Quiz.findById(req.params.id);
         if(!quiz) return res.status(404).json({error : `Quiz not Available`});
         if(!quiz.is_published) return res.status (403).json({error : ' Quiz is not available'});
 
-        if(quiz.quiz_type !== 'preposition') return res.status(400).json({error : `Quiz type ${quiz.quiz_type} is not supported`});
-        
-        const questions = await PrepQ.findByQuiz(quiz.quiz_id);
-
-        const safeQuestion = questions.map(q => ({
-            question_id : q.question_id,
-            question_text : q.question_text,
-            options : q.options,
-            instructions : q.instructions,
-            hint : q.hint,
-            points : q.points
-            
+        if (quiz.quiz_type === 'preposition') {
+            questions = await PrepositionQuiz.findByQuiz(quiz.quiz_id);
+            safeQuestions = questions.map(q => ({
+                question_id: q.question_id,
+                question_type: 'multiple_choice',       // ⬅️ tag it
+                question_text: q.question_text,
+                instructions: q.instructions,
+                hint: q.hint,
+                points: q.points,
+                options: q.options
         }));
-
+        } else if (quiz.quiz_type === 'irregular_verb') {
+            questions = await IrregularVerbQuiz.findByQuiz(quiz.quiz_id);
+            safeQuestions = questions.map(q => ({
+                question_id: q.question_id,
+                question_type: 'text_input',            // ⬅️ tag it
+                question_text: q.question_text,
+                instructions: q.instructions,
+                hint: q.hint,
+                points: q.points,
+                present_form: q.present_form,
+                ask_for: q.ask_for
+        }));
+        } else {
+            return res.status(400).json({ error: `Quiz type "${quiz.quiz_type}" not yet supported` });
+        }
         // to create session
         const session = await Session.create({
             student_id: req.user.id,
@@ -48,7 +63,7 @@ exports.getForStudent = async (req,res) => {
                 time_limit : quiz.time_limit,
                 questions_per_quiz : quiz.questions_per_quiz
             },
-            questions : safeQuestion,
+            questions : safeQuestions,
             session: {
                 session_id: session.session_id,
                 session_code: session.session_code,
@@ -66,12 +81,22 @@ exports.getForStudent = async (req,res) => {
 exports.submit = async (req,res) => {
 
     try {
+
+        let questions;
         const quiz = await Quiz.findById(req.params.id);
         if(!quiz) return res.status(404).json({error : 'Quiz not Found'});
 
-        if(quiz.quiz_type !== 'preposition') return res.status(400).json({error : `Quiz type ${quiz.quiz_type} is not supported`});
+        if (quiz.quiz_type === 'preposition') {
+            questions = await PrepositionQuiz.findByQuiz(quiz.quiz_id);
+        } else if (quiz.quiz_type === 'irregular_verb') {
+            questions = await IrregularVerbQuiz.findByQuiz(quiz.quiz_id);
+        } else {
+            return res.status(400).json({ error: 'Quiz type not yet supported' });
+        }
 
         const {answers, session_id, time_taken} = req.body;
+
+        //
 
         if(!Array.isArray(answers) || answers.length === 0){
             return res.status(400).json({error : 'Answers must be a non-empty array'});
@@ -89,7 +114,9 @@ exports.submit = async (req,res) => {
         if(session.quiz_id !== quiz.quiz_id){
             return res.status(400).json({error : 'Session does not match this quiz'})
         }
-        const questions = await PrepQ.findByQuiz(quiz.quiz_id);
+
+        //
+        
         const questionMap = new Map(questions.map(q => [q.question_id, q]));
         
         let correctCount = 0;
@@ -99,7 +126,28 @@ exports.submit = async (req,res) => {
             const q = questionMap.get(answer.question_id);
             if(!q) continue;
 
-            const isCorrect = Number(answer.selected_index) === q.correct_option_index;
+            let isCorrect = false;
+            let studentAnswerJSON = null;
+
+            // ─── Validate based on quiz type ───
+            if (quiz.quiz_type === 'preposition') {
+                isCorrect = Number(answer.selected_index) === q.correct_option_index;
+                studentAnswerJSON = { selected_index: Number(answer.selected_index) };
+                
+            } else if (quiz.quiz_type === 'irregular_verb') {
+                // Normalize: lowercase, trim
+                const studentText = String(answer.text || '').trim().toLowerCase();
+                const correctText = String(q.correct_answer).trim().toLowerCase();
+
+                // Check alternative_answers too
+                const alternatives = Array.isArray(q.alternative_answers)
+                ? q.alternative_answers.map(a => String(a).trim().toLowerCase())
+                : [];
+
+                isCorrect = studentText === correctText || alternatives.includes(studentText);
+                studentAnswerJSON = { text: answer.text || '' };
+            }
+
             if (isCorrect) correctCount ++;
 
 
@@ -116,16 +164,29 @@ exports.submit = async (req,res) => {
                 score_earned: isCorrect ? q.points : 0
             });
 
+
             results.push({
                 question_id : q.question_id,
                 question_text : q.question_text,
                 selected_index: Number(answer.selected_index),
-                selected_answer: q.options[answer.selected_index] || null,
-                correct_index: q.correct_option_index,
-                correct_answer: q.correct_answer,
+                //selected_answer: q.options[answer.selected_index] || null,
+                //correct_index: q.correct_option_index,
+                //correct_answer: q.correct_answer,
                 is_correct: isCorrect,
                 explanation: q.explanation,
-                hint: q.hint
+                hint: q.hint,
+                        ...(quiz.quiz_type === 'preposition' ? {
+                    selected_index: Number(answer.selected_index),
+                    selected_answer: q.options[answer.selected_index] || null,
+                    correct_index: q.correct_option_index,
+                    correct_answer: q.correct_answer
+                    } : {}),
+                    ...(quiz.quiz_type === 'irregular_verb' ? {
+                    selected_answer: answer.text || '(none)',
+                    correct_answer: q.correct_answer,
+                    present_form: q.present_form,
+                    ask_for: q.ask_for
+                    } : {})
             });
         }
 
