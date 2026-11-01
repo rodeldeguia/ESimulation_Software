@@ -41,8 +41,15 @@ form.addEventListener('submit', async (e) => {
     showMessage('Login successful! Redirecting...', 'success');
 
     // Teacher OR admin — both get sent to teacher dashboard for now
+    const storedUser = JSON.parse(localStorage.getItem('user'));
+    
+    
+
     setTimeout(() => {
-      window.location.href = '/teacher/dashboard.html';
+      if(storedUser.role === 'admin'){
+        window.location.href = '/admin/dashboard.html';
+      }else{
+      window.location.href = '/teacher/dashboard.html';}
     }, 800);
 
   } catch (err) {

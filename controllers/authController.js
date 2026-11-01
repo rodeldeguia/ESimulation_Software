@@ -157,7 +157,8 @@ exports.loginTeacher = async (req,res) => {
                 full_name:teacher.full_name,
                 department: teacher.department,
                 specialization:teacher.specialization,
-                contact_number: teacher.contact_number
+                contact_number: teacher.contact_number,
+                role: teacher.role
 
             }
         })

@@ -55,7 +55,7 @@ form.addEventListener('submit', async (e) => {
       return;
     }
 
-    showMessage('Lesson created! Redirecting...', 'success');
+    showMessage('Lesson submitted for admin approval Redirecting...', 'success');
     setTimeout(() => {
       window.location.href = '/teacher/lessons.html';
     }, 1000);
