@@ -6,6 +6,8 @@ const Progress = require('../models/progressModel');
 const IrregularVerbQuiz = require('../models/irregularVerbQuizModel');
 const ClauseQuiz = require('../models/clauseQiuzModel');
 const SvaQuiz = require('../models/svaQuizModel');
+const PhrasalVerbQuiz = require('../models/phrasalVerbModel');
+const SentencePatternQuiz = require('../models/sentencePatternQuizModel');
 
 exports.getForStudent = async (req,res) => {
 
@@ -54,23 +56,51 @@ exports.getForStudent = async (req,res) => {
                 // clause_type: q.clause_type,     // extra context
                 options: q.options
             }));
+        
+        } else if (quiz.quiz_type === 'sva') {
+            questions = await SvaQuiz.findByQuiz(quiz.quiz_id);
+            safeQuestions = questions.map(q => ({
+                question_id: q.question_id,
+                question_type: 'sentence_construction',
+                instruction: q.instruction,
+                hint: q.hint,
+                points: q.points,
+                context: q.context,
+                subject_type: q.subject_type,
+                verb_type: q.verb_type,
+                min_sentence_length: q.min_sentence_length,
+                max_sentence_length: q.max_sentence_length
+                // ⚠️ NOT sent: example_sentence, nlp_rules
+        }));
             
-            } else if (quiz.quiz_type === 'sva') {
-                questions = await SvaQuiz.findByQuiz(quiz.quiz_id);
+            } else if (quiz.quiz_type === 'phrasal_verb') {
+                questions = await PhrasalVerbQuiz.findByQuiz(quiz.quiz_id);
                 safeQuestions = questions.map(q => ({
                     question_id: q.question_id,
                     question_type: 'sentence_construction',
                     instruction: q.instruction,
                     hint: q.hint,
                     points: q.points,
-                    context: q.context,
-                    subject_type: q.subject_type,
-                    verb_type: q.verb_type,
+                    target_phrasal_verb: q.target_phrasal_verb,   // shown so student knows which verb to use
                     min_sentence_length: q.min_sentence_length,
                     max_sentence_length: q.max_sentence_length
-                    // ⚠️ NOT sent: example_sentence, nlp_rules
+                    // NOT sent: example_sentence, alternative_verbs, nlp_rules
             }));
-                
+
+            } else if (quiz.quiz_type === 'sentence_pattern') {
+                questions = await SentencePatternQuiz.findByQuiz(quiz.quiz_id);
+                safeQuestions = questions.map(q => ({
+                    question_id: q.question_id,
+                    question_type: 'pattern_choice',
+                    instruction: q.instruction,
+                    hint: q.hint,
+                    points: q.points,
+                    allowed_patterns: q.allowed_patterns,         // for dropdown
+                    min_sentence_length: q.min_sentence_length,
+                    max_sentence_length: q.max_sentence_length
+                    // NOT sent: target_pattern, nlp_rules
+                }));
+                    
 
         } else {
             return res.status(400).json({ error: `Quiz type "${quiz.quiz_type}" not yet supported` });
@@ -128,6 +158,10 @@ exports.submit = async (req,res) => {
             questions = await ClauseQuiz.findByQuiz(quiz.quiz_id);
         } else if (quiz.quiz_type === 'sva') {
             questions = await SvaQuiz.findByQuiz(quiz.quiz_id);
+        } else if (quiz.quiz_type === 'phrasal_verb') {
+            questions = await PhrasalVerbQuiz.findByQuiz(quiz.quiz_id);
+        } else if (quiz.quiz_type === 'sentence_pattern') {
+            questions = await SentencePatternQuiz.findByQuiz(quiz.quiz_id);
         }else {
             return res.status(400).json({ error: 'Quiz type not yet supported' });
         }
@@ -208,6 +242,22 @@ exports.submit = async (req,res) => {
                 isCorrect = svaResult.isCorrect;
                 svaReason = svaResult.reason || null;
                 studentAnswerJSON = { text: answer.text || '', reason: svaReason };
+
+            }else if (quiz.quiz_type === 'phrasal_verb') {
+            const result = validatePhrasalVerbAnswer(answer.text, q);
+            isCorrect = result.isCorrect;
+            studentAnswerJSON = { text: answer.text || '', reason: result.reason || null };
+            svaReason = result.reason || null;   // reuse the reason variable
+
+            } else if (quiz.quiz_type === 'sentence_pattern') {
+            const result = validateSentencePatternAnswer(answer.text, answer.selected_pattern, q);
+            isCorrect = result.isCorrect;
+            studentAnswerJSON = {
+                text: answer.text || '',
+                selected_pattern: answer.selected_pattern || '',
+                reason: result.reason || null
+            };
+            svaReason = result.reason || null;
             }
 
 
@@ -269,6 +319,21 @@ exports.submit = async (req,res) => {
                     example_sentence: q.example_sentence,      // now safe to reveal
                     subject_type: q.subject_type,
                     verb_type: q.verb_type,
+                    reason: svaReason
+                    } : {}),
+
+                    ...(quiz.quiz_type === 'phrasal_verb' ? {
+                    student_text: answer.text || '',
+                    target_phrasal_verb: q.target_phrasal_verb,
+                    example_sentence: q.example_sentence,
+                    reason: svaReason
+                    } : {}),
+
+                    ...(quiz.quiz_type === 'sentence_pattern' ? {
+                    student_text: answer.text || '',
+                    selected_pattern: answer.selected_pattern || '',
+                    correct_pattern: q.target_pattern,
+                    pattern_correct: String(answer.selected_pattern || '').trim().toUpperCase() === String(q.target_pattern || '').trim().toUpperCase(),
                     reason: svaReason
                     } : {}),
             });
@@ -364,6 +429,71 @@ exports.submit = async (req,res) => {
         if (found) {
         return { isCorrect: false, reason: `Sentence must not include: "${found}"` };
         }
+    }
+
+    return { isCorrect: true };
+    }
+
+    
+        // ─── Phrasal Verb validation ───
+    function validatePhrasalVerbAnswer(text, q) {
+    if (!text || !text.trim()) {
+        return { isCorrect: false, reason: 'Empty answer' };
+    }
+
+    const normalized = text.trim().toLowerCase().replace(/[.,!?;:]/g, '').replace(/\s+/g, ' ');
+    const words = normalized.split(' ').filter(w => w.length > 0);
+
+    // Word count
+    if (words.length < (q.min_sentence_length || 1)) {
+        return { isCorrect: false, reason: `Too short — need at least ${q.min_sentence_length} words` };
+    }
+    if (words.length > (q.max_sentence_length || 50)) {
+        return { isCorrect: false, reason: `Too long — max ${q.max_sentence_length} words` };
+    }
+
+    // Check target + alternatives as substrings (phrasal verbs can be multi-word: "give up")
+    const target = String(q.target_phrasal_verb || '').trim().toLowerCase();
+    const alternatives = Array.isArray(q.alternative_verbs)
+        ? q.alternative_verbs.map(a => String(a).trim().toLowerCase())
+        : [];
+
+    const allOptions = [target, ...alternatives].filter(Boolean);
+    const found = allOptions.some(v => normalized.includes(v));
+
+    if (!found) {
+        return { isCorrect: false, reason: `Sentence must include the phrasal verb: "${q.target_phrasal_verb}"` };
+    }
+
+    return { isCorrect: true };
+    }
+
+    // ─── Sentence Pattern validation ───
+    function validateSentencePatternAnswer(text, selectedPattern, q) {
+    if (!text || !text.trim()) {
+        return { isCorrect: false, reason: 'Empty sentence' };
+    }
+    if (!selectedPattern) {
+        return { isCorrect: false, reason: 'Please select a pattern' };
+    }
+
+    const normalized = text.trim().toLowerCase().replace(/[.,!?;:]/g, '').replace(/\s+/g, ' ');
+    const words = normalized.split(' ').filter(w => w.length > 0);
+
+    // Word count
+    if (words.length < (q.min_sentence_length || 1)) {
+        return { isCorrect: false, reason: `Too short — need at least ${q.min_sentence_length} words` };
+    }
+    if (words.length > (q.max_sentence_length || 50)) {
+        return { isCorrect: false, reason: `Too long — max ${q.max_sentence_length} words` };
+    }
+
+    // Pattern match (case-insensitive, trim)
+    const selected = String(selectedPattern).trim().toUpperCase();
+    const target = String(q.target_pattern).trim().toUpperCase();
+
+    if (selected !== target) {
+        return { isCorrect: false, reason: `Wrong pattern. Correct is: ${q.target_pattern}` };
     }
 
     return { isCorrect: true };

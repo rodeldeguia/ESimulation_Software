@@ -59,8 +59,9 @@ async function loadQuiz() {
     answers = questions.map(q => ({
       question_id: q.question_id,
       question_type: q.question_type,
-      selected_index: null,
-      selected_index: null,    // for multiple choice
+      selected_index: null, // for multiple choices
+      selected_type: null,
+      selected_pattern: null,
       text: '' 
     }));
 
@@ -181,6 +182,7 @@ async function submitAnswers() {
   if (a.question_type === 'text_input') return !a.text.trim();
   if (a.question_type === 'two_step_choice') return a.selected_index === null || !a.selected_type;
   if (a.question_type === 'sentence_construction') return !a.text.trim();
+  if (a.question_type === 'pattern_choice') return !a.text.trim() || !a.selected_pattern;
   return true;
   }).length;
   if (unanswered > 0) {
@@ -240,7 +242,9 @@ function renderResults(result) {
       <h3 style="margin-bottom:16px; color:#0f172a;">Answer Breakdown</h3>
         ${result.results.map((r, i) => {
         const isTwoStep = r.selected_type !== undefined && r.correct_type !== undefined;
-        const isSva = r.student_text !== undefined;
+        const isSva = r.student_text !== undefined && r.subject_type !== undefined && r.verb_type !== undefined;
+        const isPhrasalVerb = r.target_phrasal_verb !== undefined;
+        const isPattern = r.selected_pattern !== undefined && r.correct_pattern !== undefined;
         const showClause = r.selected_answer !== undefined && r.selected_type === undefined;
         const showTwoStep = r.selected_type !== undefined && r.correct_type !== undefined;
         const showText = r.selected_answer !== undefined && r.selected_type === undefined && r.clause_correct === undefined;
@@ -267,6 +271,32 @@ function renderResults(result) {
             </div>
           `;
         }
+        if (isPhrasalVerb) {
+            return `
+              <div class="result-item ${r.is_correct ? 'correct' : 'wrong'}">
+                <h4>Q${i + 1}: ${escapeHtml(r.question_text || '')}</h4>
+                <p><strong>Target verb:</strong> <em>${escapeHtml(r.target_phrasal_verb)}</em></p>
+                <p><strong>Your sentence:</strong> <em>${escapeHtml(r.student_text || '(none)')}</em></p>
+                ${!r.is_correct && r.reason ? `<p style="color:#991b1b;"><strong>Why:</strong> ${escapeHtml(r.reason)}</p>` : ''}
+                ${r.example_sentence ? `<p><strong>Example:</strong> <em>${escapeHtml(r.example_sentence)}</em></p>` : ''}
+              </div>
+            `;
+          }
+
+          if (isPattern) {
+            return `
+              <div class="result-item ${r.is_correct ? 'correct' : 'wrong'}">
+                <h4>Q${i + 1}: ${escapeHtml(r.question_text || '')}</h4>
+                <p><strong>Your sentence:</strong> <em>${escapeHtml(r.student_text || '(none)')}</em></p>
+                <p>
+                  <strong>Pattern:</strong> ${escapeHtml(String(r.selected_pattern || '(none)'))}
+                  ${r.pattern_correct ? ' ✅' : ' ❌'}
+                </p>
+                ${!r.pattern_correct ? `<p><strong>Correct pattern:</strong> ${escapeHtml(String(r.correct_pattern))}</p>` : ''}
+                ${!r.is_correct && r.reason ? `<p style="color:#991b1b;"><strong>Why:</strong> ${escapeHtml(r.reason)}</p>` : ''}
+              </div>
+            `;
+          }
 
         // Two-step layout for clause
         return `
@@ -421,6 +451,74 @@ console.log(q);
         ${wordCount} word${wordCount !== 1 ? 's' : ''}
       </div>
     `;
+    } else if (q.question_type === 'pattern_choice') {
+    const currentText = answers[currentIdx].text || '';
+    const selectedPattern = answers[currentIdx].selected_pattern || '';
+
+    bodyHtml = `
+      <div style="background:#f1f5f9; padding:14px; border-radius:8px; margin-bottom:16px;">
+        <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
+          Write a sentence using one of these patterns: <strong>${q.allowed_patterns.join(', ')}</strong>
+        </div>
+        <div style="font-size:12px; color:#94a3b8;">
+          ${q.min_sentence_length}–${q.max_sentence_length} words
+        </div>
+      </div>
+
+      <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your sentence:</label>
+      <textarea id="textAnswer" rows="3"
+                placeholder="Write your sentence here..."
+                oninput="recordTextAnswer(this.value); updateWordCount(this.value)"
+                style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px; outline:none; resize:vertical;"
+                autofocus>${escapeHtml(currentText)}</textarea>
+
+      <div style="text-align:right; font-size:12px; color:#64748b; margin-top:6px;" id="wordCountDisplay"></div>
+
+      <label style="display:block; font-size:13px; color:#334155; margin:16px 0 8px; font-weight:600;">Select the sentence pattern:</label>
+      <select onchange="recordPattern(this.value)"
+              style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px;">
+        <option value="">-- Select pattern --</option>
+        ${q.allowed_patterns.map(p => `
+          <option value="${escapeHtml(p)}" ${selectedPattern === p ? 'selected' : ''}>${escapeHtml(p)}</option>
+        `).join('')}
+      </select>
+    `;
+    }else if (q.question_type === 'sentence_construction') {
+    const currentText = answers[currentIdx].text || '';
+    const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
+
+    // ⬅️ NEW: show the target phrasal verb
+    const phrasalVerbHtml = q.target_phrasal_verb ? `
+      <div style="background:#e0e7ff; padding:14px; border-radius:8px; margin-bottom:16px;">
+        <div style="font-size:13px; color:#3730a3; margin-bottom:4px;">Target phrasal verb:</div>
+        <div style="font-size:20px; font-weight:700; color:#1e3a8a;">"${escapeHtml(q.target_phrasal_verb)}"</div>
+      </div>
+    ` : '';
+
+    bodyHtml = `
+      ${phrasalVerbHtml}
+      ${q.context ? `<div style="background:#fef3c7; padding:14px; border-radius:8px; margin-bottom:16px; font-size:14px; color:#78350f;"><strong>Context:</strong> ${escapeHtml(q.context)}</div>` : ''}
+
+      <div style="background:#f1f5f9; padding:14px; border-radius:8px; margin-bottom:16px;">
+        <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
+          ${q.subject_type ? `Target: <strong>${escapeHtml(q.subject_type)}</strong> subject, <strong>${escapeHtml(q.verb_type)}</strong> verb` : 'Write your sentence below'}
+        </div>
+        <div style="font-size:12px; color:#94a3b8;">
+          ${q.min_sentence_length}–${q.max_sentence_length} words
+        </div>
+      </div>
+
+      <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your sentence:</label>
+      <textarea id="textAnswer" rows="4"
+                placeholder="Write your sentence here..."
+                oninput="recordTextAnswer(this.value); updateWordCount(this.value)"
+                style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px; outline:none; resize:vertical;"
+                autofocus>${escapeHtml(currentText)}</textarea>
+
+      <div style="text-align:right; font-size:12px; color:#64748b; margin-top:6px;" id="wordCountDisplay">
+        ${wordCount} word${wordCount !== 1 ? 's' : ''}
+      </div>
+    `;
   }
 
 
@@ -494,6 +592,9 @@ function updateWordCount(value) {
   if (!el) return;
   const words = value.trim() ? value.trim().split(/\s+/).length : 0;
   el.textContent = `${words} word${words !== 1 ? 's' : ''}`;
+}
+function recordPattern(pattern) {
+  answers[currentIdx].selected_pattern = pattern;
 }
 
 // ─────────────────────────────────────────
