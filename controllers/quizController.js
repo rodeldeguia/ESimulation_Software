@@ -8,6 +8,7 @@ const ClauseQuiz = require('../models/clauseQiuzModel');
 const SvaQuiz = require('../models/svaQuizModel');
 const PhrasalVerbQuiz = require('../models/phrasalVerbModel');
 const SentencePatternQuiz = require('../models/sentencePatternQuizModel');
+const NlpService = require('../utils/nlpService');
 
 exports.getForStudent = async (req,res) => {
 
@@ -237,28 +238,49 @@ exports.submit = async (req,res) => {
                     selected_type: answer.selected_type || ''
                 };
 
-            } else if (quiz.quiz_type === 'sva') {
-                const svaResult = validateSvaAnswer(answer.text, q);
-                isCorrect = svaResult.isCorrect;
-                svaReason = svaResult.reason || null;
+            }else if (quiz.quiz_type === 'sva') {
+                // 1. Run NLP validation
+                const nlpResult = NlpService.validateSvaWithNlp(answer.text, q);
+
+                // 2. Also run basic rules (word count, must_contain, etc.) — belt and suspenders
+                const ruleResult = validateSvaAnswer(answer.text, q);
+
+                // Both must pass
+                isCorrect = nlpResult.isCorrect && ruleResult.isCorrect;
+
+                // Prefer the NLP reason if it failed, else the rule reason
+                svaReason = !nlpResult.isCorrect ? nlpResult.reason
+                            : !ruleResult.isCorrect ? ruleResult.reason
+                            : null;
+
                 studentAnswerJSON = { text: answer.text || '', reason: svaReason };
 
-            }else if (quiz.quiz_type === 'phrasal_verb') {
+                }else if (quiz.quiz_type === 'phrasal_verb') {
             const result = validatePhrasalVerbAnswer(answer.text, q);
             isCorrect = result.isCorrect;
             studentAnswerJSON = { text: answer.text || '', reason: result.reason || null };
             svaReason = result.reason || null;   // reuse the reason variable
 
             } else if (quiz.quiz_type === 'sentence_pattern') {
-            const result = validateSentencePatternAnswer(answer.text, answer.selected_pattern, q);
-            isCorrect = result.isCorrect;
-            studentAnswerJSON = {
-                text: answer.text || '',
-                selected_pattern: answer.selected_pattern || '',
-                reason: result.reason || null
-            };
-            svaReason = result.reason || null;
-            }
+                // NLP checks pattern match + grammar
+                const nlpResult = NlpService.validateSentencePatternWithNlp(
+                    answer.text, answer.selected_pattern, q
+                );
+                // Rules check word count
+                const ruleResult = validateSentencePatternAnswer(answer.text, answer.selected_pattern, q);
+
+                isCorrect = nlpResult.isCorrect && ruleResult.isCorrect;
+
+                svaReason = !nlpResult.isCorrect ? nlpResult.reason
+                            : !ruleResult.isCorrect ? ruleResult.reason
+                            : null;
+
+                studentAnswerJSON = {
+                    text: answer.text || '',
+                    selected_pattern: answer.selected_pattern || '',
+                    reason: svaReason
+                };
+                }
 
 
             if (isCorrect) correctCount ++;
@@ -392,46 +414,46 @@ exports.submit = async (req,res) => {
     // ─── Phase 10: Rule-based SVA validation ───
 // Phase 11 will replace this with full NLP validation
     function validateSvaAnswer(text, q) {
-    if (!text || !text.trim()) {
-        return { isCorrect: false, reason: 'Empty answer' };
-    }
-
-    const raw = text.trim();
-    const normalized = raw.toLowerCase().replace(/[.,!?;:]/g, '').replace(/\s+/g, ' ').trim();
-    const words = normalized.split(' ').filter(w => w.length > 0);
-
-    // 1. Word count bounds
-    if (words.length < (q.min_sentence_length || 1)) {
-        return { isCorrect: false, reason: `Too short — need at least ${q.min_sentence_length} words` };
-    }
-    if (words.length > (q.max_sentence_length || 50)) {
-        return { isCorrect: false, reason: `Too long — max ${q.max_sentence_length} words` };
-    }
-
-    // 2. Parse rules
-    let rules = q.nlp_rules;
-    if (typeof rules === 'string') {
-        try { rules = JSON.parse(rules); } catch { rules = {}; }
-    }
-    rules = rules || {};
-
-    // 3. Must contain at least one of these (whole word match)
-    if (Array.isArray(rules.must_contain) && rules.must_contain.length > 0) {
-        const found = rules.must_contain.some(w => words.includes(w.toLowerCase()));
-        if (!found) {
-        return { isCorrect: false, reason: `Sentence must include one of: ${rules.must_contain.join(', ')}` };
+        if (!text || !text.trim()) {
+            return { isCorrect: false, reason: 'Empty answer' };
         }
-    }
 
-    // 4. Must not contain any of these (whole word match)
-    if (Array.isArray(rules.must_not_contain) && rules.must_not_contain.length > 0) {
-        const found = rules.must_not_contain.find(w => words.includes(w.toLowerCase()));
-        if (found) {
-        return { isCorrect: false, reason: `Sentence must not include: "${found}"` };
+        const raw = text.trim();
+        const normalized = raw.toLowerCase().replace(/[.,!?;:]/g, '').replace(/\s+/g, ' ').trim();
+        const words = normalized.split(' ').filter(w => w.length > 0);
+
+        // 1. Word count bounds
+        if (words.length < (q.min_sentence_length || 1)) {
+            return { isCorrect: false, reason: `Too short — need at least ${q.min_sentence_length} words` };
         }
-    }
+        if (words.length > (q.max_sentence_length || 50)) {
+            return { isCorrect: false, reason: `Too long — max ${q.max_sentence_length} words` };
+        }
 
-    return { isCorrect: true };
+        // // 2. Parse rules
+        // let rules = q.nlp_rules;
+        // if (typeof rules === 'string') {
+        //     try { rules = JSON.parse(rules); } catch { rules = {}; }
+        // }
+        // rules = rules || {};
+
+        // // 3. Must contain at least one of these (whole word match)
+        // if (Array.isArray(rules.must_contain) && rules.must_contain.length > 0) {
+        //     const found = rules.must_contain.some(w => words.includes(w.toLowerCase()));
+        //     if (!found) {
+        //     return { isCorrect: false, reason: `Sentence must include one of: ${rules.must_contain.join(', ')}` };
+        //     }
+        // }
+
+        // // 4. Must not contain any of these (whole word match)
+        // if (Array.isArray(rules.must_not_contain) && rules.must_not_contain.length > 0) {
+        //     const found = rules.must_not_contain.find(w => words.includes(w.toLowerCase()));
+        //     if (found) {
+        //     return { isCorrect: false, reason: `Sentence must not include: "${found}"` };
+        //     }
+        // }
+
+        return { isCorrect: true };
     }
 
     
@@ -473,9 +495,9 @@ exports.submit = async (req,res) => {
     if (!text || !text.trim()) {
         return { isCorrect: false, reason: 'Empty sentence' };
     }
-    if (!selectedPattern) {
-        return { isCorrect: false, reason: 'Please select a pattern' };
-    }
+    // if (!selectedPattern) {
+    //     return { isCorrect: false, reason: 'Please select a pattern' };
+    // }
 
     const normalized = text.trim().toLowerCase().replace(/[.,!?;:]/g, '').replace(/\s+/g, ' ');
     const words = normalized.split(' ').filter(w => w.length > 0);
@@ -489,12 +511,12 @@ exports.submit = async (req,res) => {
     }
 
     // Pattern match (case-insensitive, trim)
-    const selected = String(selectedPattern).trim().toUpperCase();
-    const target = String(q.target_pattern).trim().toUpperCase();
+    // const selected = String(selectedPattern).trim().toUpperCase();
+    // const target = String(q.target_pattern).trim().toUpperCase();
 
-    if (selected !== target) {
-        return { isCorrect: false, reason: `Wrong pattern. Correct is: ${q.target_pattern}` };
-    }
+    // if (selected !== target) {
+    //     return { isCorrect: false, reason: `Wrong pattern. Correct is: ${q.target_pattern}` };
+    // }
 
     return { isCorrect: true };
     }
