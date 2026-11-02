@@ -5,6 +5,7 @@ const Answer = require('../models/answerModel');
 const Progress = require('../models/progressModel');
 const IrregularVerbQuiz = require('../models/irregularVerbQuizModel');
 const ClauseQuiz = require('../models/clauseQiuzModel');
+const SvaQuiz = require('../models/svaQuizModel');
 
 exports.getForStudent = async (req,res) => {
 
@@ -54,6 +55,23 @@ exports.getForStudent = async (req,res) => {
                 options: q.options
             }));
             
+            } else if (quiz.quiz_type === 'sva') {
+                questions = await SvaQuiz.findByQuiz(quiz.quiz_id);
+                safeQuestions = questions.map(q => ({
+                    question_id: q.question_id,
+                    question_type: 'sentence_construction',
+                    instruction: q.instruction,
+                    hint: q.hint,
+                    points: q.points,
+                    context: q.context,
+                    subject_type: q.subject_type,
+                    verb_type: q.verb_type,
+                    min_sentence_length: q.min_sentence_length,
+                    max_sentence_length: q.max_sentence_length
+                    // ⚠️ NOT sent: example_sentence, nlp_rules
+            }));
+                
+
         } else {
             return res.status(400).json({ error: `Quiz type "${quiz.quiz_type}" not yet supported` });
         }
@@ -108,6 +126,8 @@ exports.submit = async (req,res) => {
             questions = await IrregularVerbQuiz.findByQuiz(quiz.quiz_id);
         } else if (quiz.quiz_type === 'clause') {
             questions = await ClauseQuiz.findByQuiz(quiz.quiz_id);
+        } else if (quiz.quiz_type === 'sva') {
+            questions = await SvaQuiz.findByQuiz(quiz.quiz_id);
         }else {
             return res.status(400).json({ error: 'Quiz type not yet supported' });
         }
@@ -146,6 +166,8 @@ exports.submit = async (req,res) => {
 
             let isCorrect = false;
             let studentAnswerJSON = null;
+            let svaReason = null;
+
 
             // ─── Validate based on quiz type ───
             if (quiz.quiz_type === 'preposition') {
@@ -180,7 +202,14 @@ exports.submit = async (req,res) => {
                     selected_index: Number(answer.selected_index),
                     selected_type: answer.selected_type || ''
                 };
-                }
+
+            } else if (quiz.quiz_type === 'sva') {
+                const svaResult = validateSvaAnswer(answer.text, q);
+                isCorrect = svaResult.isCorrect;
+                svaReason = svaResult.reason || null;
+                studentAnswerJSON = { text: answer.text || '', reason: svaReason };
+            }
+
 
             if (isCorrect) correctCount ++;
 
@@ -193,7 +222,7 @@ exports.submit = async (req,res) => {
                 answer_type: quiz.quiz_purpose,
                 question_type: quiz.quiz_type,
                 question_id: q.question_id,
-                student_answer: { selected_index: Number(answer.selected_index) },
+                student_answer: studentAnswerJSON ? JSON.stringify(studentAnswerJSON) : null,
                 is_correct: isCorrect,
                 score_earned: isCorrect ? q.points : 0
             });
@@ -201,7 +230,7 @@ exports.submit = async (req,res) => {
 
             results.push({
                 question_id : q.question_id,
-                question_text : q.question_text,
+                question_text : q.question_text || q.instruction || '',//unify the field name
                 selected_index: Number(answer.selected_index),
                 //selected_answer: q.options[answer.selected_index] || null,
                 //correct_index: q.correct_option_index,
@@ -233,6 +262,14 @@ exports.submit = async (req,res) => {
                     clause_correct: Number(answer.selected_index) === q.correct_option_index,
                     type_correct: String(answer.selected_type || '').trim().toLowerCase() === String(q.clause_type || '').trim().toLowerCase(),
                     sentence: q.sentence
+                    } : {}),
+
+                    ...(quiz.quiz_type === 'sva' ? {
+                    student_text: answer.text || '',
+                    example_sentence: q.example_sentence,      // now safe to reveal
+                    subject_type: q.subject_type,
+                    verb_type: q.verb_type,
+                    reason: svaReason
                     } : {}),
             });
         }
@@ -286,5 +323,49 @@ exports.submit = async (req,res) => {
         res.status(500).json({error : 'Server Error'})
         
     };
-    
+
+    // ─── Phase 10: Rule-based SVA validation ───
+// Phase 11 will replace this with full NLP validation
+    function validateSvaAnswer(text, q) {
+    if (!text || !text.trim()) {
+        return { isCorrect: false, reason: 'Empty answer' };
+    }
+
+    const raw = text.trim();
+    const normalized = raw.toLowerCase().replace(/[.,!?;:]/g, '').replace(/\s+/g, ' ').trim();
+    const words = normalized.split(' ').filter(w => w.length > 0);
+
+    // 1. Word count bounds
+    if (words.length < (q.min_sentence_length || 1)) {
+        return { isCorrect: false, reason: `Too short — need at least ${q.min_sentence_length} words` };
+    }
+    if (words.length > (q.max_sentence_length || 50)) {
+        return { isCorrect: false, reason: `Too long — max ${q.max_sentence_length} words` };
+    }
+
+    // 2. Parse rules
+    let rules = q.nlp_rules;
+    if (typeof rules === 'string') {
+        try { rules = JSON.parse(rules); } catch { rules = {}; }
+    }
+    rules = rules || {};
+
+    // 3. Must contain at least one of these (whole word match)
+    if (Array.isArray(rules.must_contain) && rules.must_contain.length > 0) {
+        const found = rules.must_contain.some(w => words.includes(w.toLowerCase()));
+        if (!found) {
+        return { isCorrect: false, reason: `Sentence must include one of: ${rules.must_contain.join(', ')}` };
+        }
+    }
+
+    // 4. Must not contain any of these (whole word match)
+    if (Array.isArray(rules.must_not_contain) && rules.must_not_contain.length > 0) {
+        const found = rules.must_not_contain.find(w => words.includes(w.toLowerCase()));
+        if (found) {
+        return { isCorrect: false, reason: `Sentence must not include: "${found}"` };
+        }
+    }
+
+    return { isCorrect: true };
+    }
 }

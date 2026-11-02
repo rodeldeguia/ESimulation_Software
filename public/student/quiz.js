@@ -180,6 +180,7 @@ async function submitAnswers() {
   if (a.question_type === 'multiple_choice') return a.selected_index === null;
   if (a.question_type === 'text_input') return !a.text.trim();
   if (a.question_type === 'two_step_choice') return a.selected_index === null || !a.selected_type;
+  if (a.question_type === 'sentence_construction') return !a.text.trim();
   return true;
   }).length;
   if (unanswered > 0) {
@@ -238,6 +239,8 @@ function renderResults(result) {
     <div class="result-breakdown">
       <h3 style="margin-bottom:16px; color:#0f172a;">Answer Breakdown</h3>
         ${result.results.map((r, i) => {
+        const isTwoStep = r.selected_type !== undefined && r.correct_type !== undefined;
+        const isSva = r.student_text !== undefined;
         const showClause = r.selected_answer !== undefined && r.selected_type === undefined;
         const showTwoStep = r.selected_type !== undefined && r.correct_type !== undefined;
         const showText = r.selected_answer !== undefined && r.selected_type === undefined && r.clause_correct === undefined;
@@ -249,6 +252,17 @@ function renderResults(result) {
               <h4>Q${i + 1}: ${escapeHtml(r.question_text)}</h4>
               ${r.selected_answer !== undefined ? `<p><strong>Your answer:</strong> ${escapeHtml(String(r.selected_answer || '(none)'))}</p>` : ''}
               ${!r.is_correct && r.correct_answer ? `<p><strong>Correct answer:</strong> ${escapeHtml(String(r.correct_answer))}</p>` : ''}
+              ${r.explanation ? `<p><em>${escapeHtml(r.explanation)}</em></p>` : ''}
+            </div>
+          `;
+        }
+        if (isSva) {
+          return `
+            <div class="result-item ${r.is_correct ? 'correct' : 'wrong'}">
+              <h4>Q${i + 1}: ${escapeHtml(r.question_text || '')}</h4>
+              <p><strong>Your sentence:</strong> <em>${escapeHtml(r.student_text || '(none)')}</em></p>
+              ${!r.is_correct ? `<p style="color:#991b1b;"><strong>Why:</strong> ${escapeHtml(r.reason || 'Not valid')}</p>` : ''}
+              ${r.example_sentence ? `<p><strong>Example:</strong> <em>${escapeHtml(r.example_sentence)}</em></p>` : ''}
               ${r.explanation ? `<p><em>${escapeHtml(r.explanation)}</em></p>` : ''}
             </div>
           `;
@@ -376,7 +390,39 @@ console.log(q);
         `).join('')}
       </ul>
     `;
+  }else if (q.question_type === 'sentence_construction') {
+    const currentText = answers[currentIdx].text || '';
+    const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
+
+    bodyHtml = `
+      ${q.context ? `
+        <div style="background:#fef3c7; padding:14px; border-radius:8px; margin-bottom:16px; font-size:14px; color:#78350f;">
+          <strong>Context:</strong> ${escapeHtml(q.context)}
+        </div>
+      ` : ''}
+
+      <div style="background:#f1f5f9; padding:14px; border-radius:8px; margin-bottom:16px;">
+        <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
+          Target: <strong>${escapeHtml(q.subject_type)}</strong> subject, <strong>${escapeHtml(q.verb_type)}</strong> verb
+        </div>
+        <div style="font-size:12px; color:#94a3b8;">
+          ${q.min_sentence_length}–${q.max_sentence_length} words
+        </div>
+      </div>
+
+      <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your sentence:</label>
+      <textarea id="textAnswer" rows="4"
+                placeholder="Write your sentence here..."
+                oninput="recordTextAnswer(this.value); updateWordCount(this.value)"
+                style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px; outline:none; resize:vertical;"
+                autofocus>${escapeHtml(currentText)}</textarea>
+
+      <div style="text-align:right; font-size:12px; color:#64748b; margin-top:6px;" id="wordCountDisplay">
+        ${wordCount} word${wordCount !== 1 ? 's' : ''}
+      </div>
+    `;
   }
+
 
   app.innerHTML = `
     <div class="quiz-header">
@@ -441,6 +487,13 @@ function selectClause(idx) {
 function selectType(type) {
   answers[currentIdx].selected_type = type;
   renderQuestion();
+}
+
+function updateWordCount(value) {
+  const el = document.getElementById('wordCountDisplay');
+  if (!el) return;
+  const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+  el.textContent = `${words} word${words !== 1 ? 's' : ''}`;
 }
 
 // ─────────────────────────────────────────
