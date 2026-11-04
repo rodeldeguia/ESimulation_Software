@@ -66,14 +66,37 @@ module.exports = {
 
   // ─── Approve lesson ───
   async approveLesson(lesson_id) {
-    const [result] = await pool.query(
-      `UPDATE lessons
-       SET is_published = 1, published_at = NOW()
-       WHERE lesson_id = ? AND is_published = 0`,
-      [lesson_id]
-    );
-    return result.affectedRows > 0;
-  },
+  // 1. Find the current highest lesson order for this grade level
+  const [currentMax] = await pool.query(
+    `SELECT lesson_id, MAX(lesson_order) AS max_order 
+     FROM lessons 
+     WHERE is_published = 1 AND lesson_id != ? 
+     GROUP BY lesson_id 
+     ORDER BY max_order DESC LIMIT 1`,
+    [lesson_id]
+  );
+
+  let nextOrder = 1;
+  let prerequisiteId = null;
+
+  if (currentMax.length > 0) {
+    nextOrder = currentMax[0].max_order + 1;
+    prerequisiteId = currentMax[0].lesson_id;
+  }
+
+  // 2. Update the lesson with the new order and prerequisite
+  const [result] = await pool.query(
+    `UPDATE lessons
+     SET is_published = 1, 
+         published_at = NOW(),
+         lesson_order = ?,
+         prerequisite_lesson_id = ?
+     WHERE lesson_id = ? AND is_published = 0`,
+    [nextOrder, prerequisiteId, lesson_id]
+  );
+  
+  return result.affectedRows > 0;
+},
 
   // ─── Reject/unpublish lesson ───
   async rejectLesson(lesson_id) {
