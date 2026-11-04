@@ -39,6 +39,27 @@ module.exports = {
             grade_level,
             is_published : is_published ?? 1
         } ;
+    },
+
+
+    async update(lessonId, { title, description, discussion_content, grade_level, lesson_order, prerequisite_lesson_id, passing_score, max_quiz_attempts, is_published }) {
+        const [result] = await pool.query(
+            `UPDATE lessons
+            SET title = ?,
+                description = ?,
+                discussion_content = ?,
+                grade_level = ?,
+            WHERE lesson_id = ?`,
+            [
+            title,
+            description || null,
+            discussion_content,
+            grade_level,
+            lessonId
+            ]
+        );
+        return result.affectedRows > 0;
     }
+
 
 };

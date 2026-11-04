@@ -70,23 +70,73 @@ async function loadLesson() {
 
     const lesson = await res.json();
 
+        // 1. Set the base content
     document.getElementById('lessonContent').innerHTML = `
       <h1>${escapeHtml(lesson.title)}</h1>
       <p class="meta">Grade ${lesson.grade_level} • Lesson ${lesson.lesson_order}</p>
-      <div class="content">${lesson.discussion_content}</div>
-      ${quizSection}
+      <div class="content" id="lessonBody">${lesson.discussion_content}</div>
     `;
 
-  } catch (err) {
-    console.error('loadLesson error:', err);
-    document.getElementById('lessonContent').textContent = 'Error loading lesson.';
+    // 2. Find all embedded quiz placeholders and render them
+    const embeddedQuizzes = document.querySelectorAll('.embedded-quiz');
+    
+    for (const el of embeddedQuizzes) {
+      const qId = el.getAttribute('data-quiz-id');
+      if (!qId) continue;
+
+      // Fetch the quiz data
+      try {
+        const qRes = await fetch(`/api/quizzes/${qId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (qRes.ok) {
+          const qData = await qRes.json();
+          const q = qData.questions[0]; // Embedded quizzes only have 1 question
+
+          if (q) {
+            // Render a simple inline quiz widget
+            let optionsHtml = '';
+            if (q.question_type === 'multiple_choice') {
+              optionsHtml = q.options.map((opt, i) => `
+                <label style="display:block; padding:8px; margin-bottom:4px; border:1px solid #ddd; border-radius:4px; cursor:pointer;">
+                  <input type="radio" name="quiz_${qId}" value="${i}">
+                  ${escapeHtml(opt)}
+                </label>
+              `).join('');
+            }
+
+            el.innerHTML = `
+              <div style="background:#fff; border:2px solid #4CAF50; border-radius:8px; padding:20px; margin:24px 0; text-align:left; font-weight:normal;">
+                <div style="color:#4CAF50; font-weight:bold; margin-bottom:8px; font-size:14px;">📝 Quick Check</div>
+                <div style="font-size:16px; color:#333; margin-bottom:16px;">${escapeHtml(q.question_text || q.instruction)}</div>
+                <div style="margin-bottom:16px;">${optionsHtml}</div>
+                <button onclick="checkInlineQuiz('${qId}', ${q.correct_option_index !== undefined ? q.correct_option_index : 'undefined'})" style="background:#2196F3; color:white; padding:8px 16px; border:none; border-radius:4px; cursor:pointer;">Check Answer</button>
+                <div id="quiz_result_${qId}" style="margin-top:12px; font-weight:bold;"></div>
+              </div>
+            `;
+          } else {
+            el.innerHTML = `<div style="color:red;">Quiz data missing.</div>`;
+          }
+        }
+      }catch (err) {
+        console.error('Failed to load embedded quiz', qId, err);
+      }
+    }
+    
+  }catch (err) {                        // ← add catch for the outer try
+    console.error('Failed to load lesson', err);
+    document.getElementById('lessonContent').textContent = 'Failed to load lesson.';
   }
-}
+} 
+  
+  
+  
 
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
 }
-
+  
 loadLesson();

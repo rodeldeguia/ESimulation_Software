@@ -692,3 +692,48 @@ exports.listTeacherQuizzes = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+// ═══════════════════════════════════════════════════════
+// TEACHER: Create an embedded quiz from the lesson editor
+// ═══════════════════════════════════════════════════════
+exports.createEmbeddedQuiz = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Teacher access only' });
+    }
+
+    const { lesson_id, quiz_type, question_text, options, correct_option_index, correct_answer, explanation, sentence, clause_text, clause_type } = req.body;
+
+    if (!lesson_id || !quiz_type) {
+      return res.status(400).json({ error: 'Missing lesson_id or quiz_type' });
+    }
+
+    // 1. Create a "container" quiz in the quizzes table
+    const [quizResult] = await pool.query(
+      `INSERT INTO quizzes (lesson_id, teacher_id, quiz_type, quiz_purpose, title, passing_score, is_published) 
+       VALUES (?, ?, ?, 'review', 'Embedded Quiz', 70.00, 1)`,
+      [lesson_id, req.user.id, quiz_type]
+    );
+    const quiz_id = quizResult.insertId;
+
+    // 2. Insert the question based on type
+    if (quiz_type === 'preposition') {
+      await pool.query(
+        `INSERT INTO preposition_quiz (quiz_id, question_text, options, correct_option_index, correct_answer, explanation, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [quiz_id, question_text, JSON.stringify(options), correct_option_index, correct_answer, explanation, req.user.id]
+      );
+    } else if (quiz_type === 'clause') {
+      await pool.query(
+        `INSERT INTO clause_quiz (quiz_id, question_text, sentence, options, correct_option_index, clause_text, clause_type, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [quiz_id, question_text, sentence, JSON.stringify(options), correct_option_index, clause_text, clause_type, req.user.id]
+      );
+    }
+
+    res.status(201).json({ quiz_id });
+  } catch (err) {
+    console.error('createEmbeddedQuiz error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};

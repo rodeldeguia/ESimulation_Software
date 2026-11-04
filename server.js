@@ -3,6 +3,7 @@
 //database connection
 require('dotenv').config();
 
+const path = require('path');
 const express = require('express');
 const logger = require('./middleware/logger');
 const authRouter = require('./routes/auth');
@@ -22,7 +23,9 @@ const PORT = process.env.PORT;
 // Middleware
 app.use(logger)
 app.use(express.json()); // reading the incoming request as json
-app.use(express.static('public'))
+app.use(express.static('public'));
+// Serve TinyMCE from node_modules
+app.use('/tinymce', express.static(path.join(__dirname, 'node_modules', 'tinymce')));
 
 
 //routes
