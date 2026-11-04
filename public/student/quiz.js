@@ -62,6 +62,7 @@ async function loadQuiz() {
       selected_index: null, // for multiple choices
       selected_type: null,
       selected_pattern: null,
+      phrasal_verb_answer: '',
       text: '' 
     }));
 
@@ -183,6 +184,8 @@ async function submitAnswers() {
   if (a.question_type === 'two_step_choice') return a.selected_index === null || !a.selected_type;
   if (a.question_type === 'sentence_construction') return !a.text.trim();
   if (a.question_type === 'pattern_choice') return !a.text.trim() || !a.selected_pattern;
+  
+  
   return true;
   }).length;
   if (unanswered > 0) {
@@ -420,37 +423,37 @@ console.log(q);
         `).join('')}
       </ul>
     `;
-  }else if (q.question_type === 'sentence_construction') {
-    const currentText = answers[currentIdx].text || '';
-    const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
+  // }else if (q.question_type === 'sentence_construction') {
+  //   const currentText = answers[currentIdx].text || '';
+  //   const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
 
-    bodyHtml = `
-      ${q.context ? `
-        <div style="background:#fef3c7; padding:14px; border-radius:8px; margin-bottom:16px; font-size:14px; color:#78350f;">
-          <strong>Context:</strong> ${escapeHtml(q.context)}
-        </div>
-      ` : ''}
+  //   bodyHtml = `
+  //     ${q.context ? `
+  //       <div style="background:#fef3c7; padding:14px; border-radius:8px; margin-bottom:16px; font-size:14px; color:#78350f;">
+  //         <strong>Context:</strong> ${escapeHtml(q.context)}
+  //       </div>
+  //     ` : ''}
 
-      <div style="background:#f1f5f9; padding:14px; border-radius:8px; margin-bottom:16px;">
-        <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
-          Target: <strong>${escapeHtml(q.subject_type)}</strong> subject, <strong>${escapeHtml(q.verb_type)}</strong> verb
-        </div>
-        <div style="font-size:12px; color:#94a3b8;">
-          ${q.min_sentence_length}–${q.max_sentence_length} words
-        </div>
-      </div>
+  //     <div style="background:#f1f5f9; padding:14px; border-radius:8px; margin-bottom:16px;">
+  //       <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
+  //         Target: <strong>${escapeHtml(q.subject_type)}</strong> subject, <strong>${escapeHtml(q.verb_type)}</strong> verb
+  //       </div>
+  //       <div style="font-size:12px; color:#94a3b8;">
+  //         ${q.min_sentence_length}–${q.max_sentence_length} words
+  //       </div>
+  //     </div>
 
-      <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your sentence:</label>
-      <textarea id="textAnswer" rows="4"
-                placeholder="Write your sentence here..."
-                oninput="recordTextAnswer(this.value); updateWordCount(this.value)"
-                style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px; outline:none; resize:vertical;"
-                autofocus>${escapeHtml(currentText)}</textarea>
+  //     <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your sentence:</label>
+  //     <textarea id="textAnswer" rows="4"
+  //               placeholder="Write your sentence here..."
+  //               oninput="recordTextAnswer(this.value); updateWordCount(this.value)"
+  //               style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px; outline:none; resize:vertical;"
+  //               autofocus>${escapeHtml(currentText)}</textarea>
 
-      <div style="text-align:right; font-size:12px; color:#64748b; margin-top:6px;" id="wordCountDisplay">
-        ${wordCount} word${wordCount !== 1 ? 's' : ''}
-      </div>
-    `;
+  //     <div style="text-align:right; font-size:12px; color:#64748b; margin-top:6px;" id="wordCountDisplay">
+  //       ${wordCount} word${wordCount !== 1 ? 's' : ''}
+  //     </div>
+  //   `;
     } else if (q.question_type === 'pattern_choice') {
     const currentText = answers[currentIdx].text || '';
     const selectedPattern = answers[currentIdx].selected_pattern || '';
@@ -483,43 +486,59 @@ console.log(q);
         `).join('')}
       </select>
     `;
-    }else if (q.question_type === 'sentence_construction') {
-    const currentText = answers[currentIdx].text || '';
-    const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
+    } else if (q.question_type === 'sentence_construction') {
+  const currentText = answers[currentIdx].text || '';
+  const currentVerbAnswer = answers[currentIdx].phrasal_verb_answer || '';
+  const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
 
-    // ⬅️ NEW: show the target phrasal verb
-    const phrasalVerbHtml = q.target_phrasal_verb ? `
-      <div style="background:#e0e7ff; padding:14px; border-radius:8px; margin-bottom:16px;">
-        <div style="font-size:13px; color:#3730a3; margin-bottom:4px;">Target phrasal verb:</div>
-        <div style="font-size:20px; font-weight:700; color:#1e3a8a;">"${escapeHtml(q.target_phrasal_verb)}"</div>
+  // Show target verb if it's a phrasal verb question
+  const phrasalVerbHint = q.target_phrasal_verb ? `
+    <div style="background:#e0e7ff; padding:14px; border-radius:8px; margin-bottom:16px;">
+      <div style="font-size:13px; color:#3730a3; margin-bottom:4px;">Target phrasal verb:</div>
+      <div style="font-size:20px; font-weight:700; color:#1e3a8a;">"${escapeHtml(q.target_phrasal_verb)}"</div>
+    </div>
+  ` : '';
+
+  // Second input shows ONLY for phrasal verb questions
+  const secondInputHtml = q.target_phrasal_verb ? `
+    <label style="display:block; font-size:13px; color:#334155; margin:16px 0 8px; font-weight:600;">
+      Identify the phrasal verb in your sentence:
+    </label>
+    <input type="text" id="verbAnswer"
+           value="${escapeHtml(currentVerbAnswer)}"
+           placeholder="Type the phrasal verb..."
+           oninput="recordPhrasalVerb(this.value)"
+           style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px;"
+           autocomplete="off">
+  ` : '';
+
+  bodyHtml = `
+    ${phrasalVerbHint}
+    ${q.context ? `<div style="background:#fef3c7; padding:14px; border-radius:8px; margin-bottom:16px; font-size:14px; color:#78350f;"><strong>Context:</strong> ${escapeHtml(q.context)}</div>` : ''}
+
+    <div style="background:#f1f5f9; padding:14px; border-radius:8px; margin-bottom:16px;">
+      <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
+        ${q.subject_type ? `Target: <strong>${escapeHtml(q.subject_type)}</strong> subject, <strong>${escapeHtml(q.verb_type)}</strong> verb` : 'Write your sentence below'}
       </div>
-    ` : '';
-
-    bodyHtml = `
-      ${phrasalVerbHtml}
-      ${q.context ? `<div style="background:#fef3c7; padding:14px; border-radius:8px; margin-bottom:16px; font-size:14px; color:#78350f;"><strong>Context:</strong> ${escapeHtml(q.context)}</div>` : ''}
-
-      <div style="background:#f1f5f9; padding:14px; border-radius:8px; margin-bottom:16px;">
-        <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
-          ${q.subject_type ? `Target: <strong>${escapeHtml(q.subject_type)}</strong> subject, <strong>${escapeHtml(q.verb_type)}</strong> verb` : 'Write your sentence below'}
-        </div>
-        <div style="font-size:12px; color:#94a3b8;">
-          ${q.min_sentence_length}–${q.max_sentence_length} words
-        </div>
+      <div style="font-size:12px; color:#94a3b8;">
+        ${q.min_sentence_length}–${q.max_sentence_length} words
       </div>
+    </div>
 
-      <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your sentence:</label>
-      <textarea id="textAnswer" rows="4"
-                placeholder="Write your sentence here..."
-                oninput="recordTextAnswer(this.value); updateWordCount(this.value)"
-                style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px; outline:none; resize:vertical;"
-                autofocus>${escapeHtml(currentText)}</textarea>
+    <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your sentence:</label>
+    <textarea id="textAnswer" rows="4"
+              placeholder="Write your sentence here..."
+              oninput="recordTextAnswer(this.value); updateWordCount(this.value)"
+              style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px; outline:none; resize:vertical;"
+              autofocus>${escapeHtml(currentText)}</textarea>
 
-      <div style="text-align:right; font-size:12px; color:#64748b; margin-top:6px;" id="wordCountDisplay">
-        ${wordCount} word${wordCount !== 1 ? 's' : ''}
-      </div>
-    `;
-  }
+    <div style="text-align:right; font-size:12px; color:#64748b; margin-top:6px;" id="wordCountDisplay">
+      ${wordCount} word${wordCount !== 1 ? 's' : ''}
+    </div>
+
+    ${secondInputHtml}
+  `;
+}
 
 
   app.innerHTML = `
@@ -595,6 +614,10 @@ function updateWordCount(value) {
 }
 function recordPattern(pattern) {
   answers[currentIdx].selected_pattern = pattern;
+}
+
+function recordPhrasalVerb(value) {
+  answers[currentIdx].phrasal_verb_answer = value;
 }
 
 // ─────────────────────────────────────────

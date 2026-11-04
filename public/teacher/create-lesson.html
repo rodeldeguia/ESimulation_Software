@@ -26,6 +26,8 @@
     }
     .back { color: #1e3a8a; text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 16px; }
   </style>
+
+    <script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
 </head>
 <body>
 
@@ -60,7 +62,7 @@
       </div>
 
       <div class="form-group">
-        <label for="discussion_content">Lesson Content (HTML for now)</label>
+        <label for="discussion_content">Lesson Content</label>
         <textarea id="discussion_content" required placeholder="<p>Your lesson content here...</p>"></textarea>
       </div>
 
@@ -76,5 +78,16 @@
   </div>
 
   <script src="/teacher/create-lesson.js"></script>
+
+    <script>
+    tinymce.init({
+      selector: '#discussion_content',
+      height: 400,
+      menubar: false,
+      plugins: 'lists link table code',
+      toolbar: 'undo redo | formatselect | bold italic underline | bullist numlist | link table | code | removeformat',
+      content_style: 'body { font-family: Segoe UI, Tahoma, sans-serif; font-size: 15px; line-height: 1.6; }'
+    });
+  </script>
 </body>
 </html>

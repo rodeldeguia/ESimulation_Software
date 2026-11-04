@@ -1,3 +1,4 @@
+const pool = require('../config/db');
 const Quiz = require('../models/quizModel');
 const PrepositionQuiz = require('../models/prepositionQuizModel');
 const Session = require('../models/sessionModel');
@@ -9,6 +10,7 @@ const SvaQuiz = require('../models/svaQuizModel');
 const PhrasalVerbQuiz = require('../models/phrasalVerbModel');
 const SentencePatternQuiz = require('../models/sentencePatternQuizModel');
 const NlpService = require('../utils/nlpService');
+const QuestionFactory = require('../models/questionFactory');
 
 exports.getForStudent = async (req,res) => {
 
@@ -521,3 +523,172 @@ exports.submit = async (req,res) => {
     return { isCorrect: true };
     }
 }
+
+// ═══════════════════════════════════════════════════════
+// TEACHER: Create quiz
+// ═══════════════════════════════════════════════════════
+exports.createQuiz = async (req, res) => {
+  try {
+    // Role check
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only teachers can create quizzes' });
+    }
+
+    const { lesson_id, quiz_type, quiz_purpose, title, description, passing_score, time_limit, questions_per_quiz } = req.body;
+
+    if (!lesson_id || !quiz_type || !title) {
+      return res.status(400).json({ error: 'lesson_id, quiz_type, and title are required' });
+    }
+
+    const validTypes = ['preposition', 'irregular_verb', 'clause', 'sva', 'phrasal_verb', 'sentence_pattern'];
+    if (!validTypes.includes(quiz_type)) {
+      return res.status(400).json({ error: `quiz_type must be one of: ${validTypes.join(', ')}` });
+    }
+
+    const quiz = await Quiz.createquiz({
+      lesson_id,
+      teacher_id: req.user.id,
+      quiz_type,
+      quiz_purpose: quiz_purpose || 'review',
+      title,
+      description,
+      passing_score: passing_score ?? 70.00,
+      time_limit: time_limit || null,
+      questions_per_quiz: questions_per_quiz ?? 10,
+      is_published: 0   // Always draft by default
+    });
+
+    res.status(201).json({
+      message: 'Quiz created as draft. Add questions then publish.',
+      quiz
+    });
+  } catch (err) {
+    console.error('createQuiz error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// TEACHER: Add a question to a quiz
+// ═══════════════════════════════════════════════════════
+exports.addQuestion = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only teachers can add questions' });
+    }
+
+    const quizId = req.params.id;
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    // Verify ownership
+    if (quiz.teacher_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'You can only add questions to your own quizzes' });
+    }
+
+    // Find the right model
+    const Model = QuestionFactory.getModel(quiz.quiz_type);
+    if (!Model) {
+      return res.status(400).json({ error: `No model found for quiz type: ${quiz.quiz_type}` });
+    }
+
+    // Add created_by automatically
+    const questionData = { ...req.body, quiz_id: quiz.quiz_id, created_by: req.user.id };
+
+    const question = await Model.createPrepositionQuestion(questionData);
+
+    res.status(201).json({
+      message: 'Question added',
+      question
+    });
+  } catch (err) {
+    console.error('addQuestion error:', err);
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// TEACHER: Get quiz + all its questions (for editing)
+// ═══════════════════════════════════════════════════════
+exports.getQuizForEditing = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Teacher access only' });
+    }
+
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    if (quiz.teacher_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'You can only edit your own quizzes' });
+    }
+
+    const Model = QuestionFactory.getModel(quiz.quiz_type);
+    if (!Model) {
+      return res.status(400).json({ error: `Unknown quiz type: ${quiz.quiz_type}` });
+    }
+
+    const questions = await Model.findByQuiz(quiz.quiz_id);
+
+    res.json({ quiz, questions });
+  } catch (err) {
+    console.error('getQuizForEditing error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// TEACHER: Publish quiz
+// ═══════════════════════════════════════════════════════
+exports.publishQuiz = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Teacher access only' });
+    }
+
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    if (quiz.teacher_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'You can only publish your own quizzes' });
+    }
+
+    // Check has at least 1 question
+    const Model = QuestionFactory.getModel(quiz.quiz_type);
+    const questions = await Model.findByQuiz(quiz.quiz_id);
+    if (questions.length === 0) {
+      return res.status(400).json({ error: 'Add at least one question before publishing' });
+    }
+
+    await pool.query('UPDATE quizzes SET is_published = 1 WHERE quiz_id = ?', [quiz.quiz_id]);
+    res.json({ message: 'Quiz published' });
+  } catch (err) {
+    console.error('publishQuiz error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// TEACHER: List their quizzes
+// ═══════════════════════════════════════════════════════
+exports.listTeacherQuizzes = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Teacher access only' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT q.*, l.title AS lesson_title
+       FROM quizzes q
+       JOIN lessons l ON l.lesson_id = q.lesson_id
+       WHERE q.teacher_id = ?
+       ORDER BY q.created_at DESC`,
+      [req.user.id]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('listTeacherQuizzes error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};

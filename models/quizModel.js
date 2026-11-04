@@ -23,8 +23,8 @@ module.exports = {
 
     async createquiz({lesson_id,teacher_id, quiz_type, quiz_purpose, title,discription,passing_score,time_limit, question_per_quiz, is_published}){
 
-        const [result] = await pool.query('INSERT INTO quizzes (teacher_id,lesson_id,quiz_type,quiz_purpose,title,description,passing_score,time_limit,question_per_quiz,is_published) VALUES (?,?,?,?,?,?,?,?,?,?)',
-                                                                [teacher_id,lesson_id,quiz_type,quiz_purpose,title,discription,passing_score,time_limit,question_per_quiz,is_published]);
+        const [result] = await pool.query('INSERT INTO quizzes (teacher_id,lesson_id,quiz_type,quiz_purpose,title,description,passing_score,time_limit,questions_per_quiz,is_published) VALUES (?,?,?,?,?,?,?,?,?,?)',
+                                                                [teacher_id,lesson_id,quiz_type,quiz_purpose,title,discription,passing_score,time_limit,question_per_quiz,is_published ?? 0]);
 
         return {
             quiz_id : result.insertId,

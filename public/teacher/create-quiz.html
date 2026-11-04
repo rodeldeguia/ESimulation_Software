@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Quiz — SSEGL</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { display: block; padding: 40px 20px; background: #f1f5f9; }
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+    .container h1 { color: #1e3a8a; margin-bottom: 8px; }
+    .container .subtitle { color: #64748b; font-size: 14px; margin-bottom: 32px; }
+    .back { color: #1e3a8a; text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 16px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: #334155;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border 0.2s;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: #1e3a8a;
+    }
+    .form-group textarea { resize: vertical; min-height: 80px; }
+    .form-group small { color: #94a3b8; font-size: 12px; display: block; margin-top: 4px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: #1e3a8a;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #1e40af; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    .message { margin-top: 16px; padding: 12px; border-radius: 6px; font-size: 13px; display: none; }
+    .message.error { background: #fee2e2; color: #991b1b; display: block; }
+    .message.success { background: #dcfce7; color: #166534; display: block; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <a class="back" href="/teacher/dashboard.html">← Back to Dashboard</a>
+    <h1>Create a Quiz</h1>
+    <p class="subtitle">Create the quiz container first, then add questions in the next step.</p>
+
+    <form id="quizForm">
+      <div class="form-group">
+        <label for="lesson_id">Lesson</label>
+        <select id="lesson_id" required>
+          <option value="">Loading lessons...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="quiz_type">Quiz Type</label>
+        <select id="quiz_type" required>
+          <option value="">-- Select quiz type --</option>
+          <option value="preposition">Preposition (Multiple Choice)</option>
+          <option value="irregular_verb">Irregular Verb (Fill in blanks)</option>
+          <option value="clause">Clause (Two-step)</option>
+          <option value="sva">Subject-Verb Agreement (Sentence construction)</option>
+          <option value="phrasal_verb">Phrasal Verb (Sentence + identify)</option>
+          <option value="sentence_pattern">Sentence Pattern (Sentence + pattern)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="quiz_purpose">Purpose</label>
+        <select id="quiz_purpose">
+          <option value="review">Review (practice after lesson)</option>
+          <option value="final">Final (assessment)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="title">Title</label>
+        <input type="text" id="title" required placeholder="e.g., Prepositions Practice Quiz">
+      </div>
+
+      <div class="form-group">
+        <label for="description">Description (optional)</label>
+        <textarea id="description" placeholder="Describe what this quiz covers..."></textarea>
+      </div>
+
+      <div class="row">
+        <div class="form-group">
+          <label for="passing_score">Passing Score (%)</label>
+          <input type="number" id="passing_score" min="0" max="100" value="70" required>
+        </div>
+
+        <div class="form-group">
+          <label for="time_limit">Time Limit (minutes)</label>
+          <input type="number" id="time_limit" min="1" value="10">
+          <small>Leave empty for no time limit</small>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="questions_per_quiz">Questions per Attempt</label>
+        <input type="number" id="questions_per_quiz" min="1" value="10">
+        <small>If you have more questions than this, students see a random subset</small>
+      </div>
+
+      <button type="submit" id="submitBtn">Create Quiz & Continue to Add Questions →</button>
+    </form>
+
+    <div id="message" class="message"></div>
+  </div>
+
+  <script src="/teacher/create-quiz.js"></script>
+</body>
+</html>

@@ -15,6 +15,10 @@ function showMessage(text, type) {
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
+    // ⬇️ NEW: sync TinyMCE content back to the textarea
+  tinymce.triggerSave();
+  // ⬆️ After this, `document.getElementById('discussion_content').value` has the editor content
+
   const payload = {
     title:              document.getElementById('title').value.trim(),
     lesson_order:       Number(document.getElementById('lesson_order').value),
