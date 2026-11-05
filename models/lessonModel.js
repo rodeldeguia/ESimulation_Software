@@ -48,7 +48,7 @@ module.exports = {
             SET title = ?,
                 description = ?,
                 discussion_content = ?,
-                grade_level = ?,
+                grade_level = ?
             WHERE lesson_id = ?`,
             [
             title,

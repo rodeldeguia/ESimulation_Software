@@ -54,46 +54,62 @@ async function loadLessonData() {
     showAlert('Error loading lesson data.', 'error');
   }
 }
+// 2. Load data if editing
+async function loadLessonData() {
+  try {
+    const res = await fetch(`/api/lessons/${lessonId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!res.ok) throw new Error('Failed to load');
+    const lesson = await res.json();
 
-if (isEdit) loadLessonData();
+    document.getElementById('title').value = lesson.title;
+    document.getElementById('grade_level').value = lesson.grade_level;
+    document.getElementById('description').value = lesson.description || '';
+
+    document.getElementById('pageTitle').textContent = 'Edit Grammar Topic';
+    document.getElementById('pageSubtitle').textContent = `Editing: ${lesson.title}`;
+    document.getElementById('saveBtn').textContent = '💾 Save Changes';
+
+    // ⬇️ THE FIX: Wait for TinyMCE to be completely ready
+    const waitForEditor = setInterval(() => {
+      if (window.editorInstance) {
+        clearInterval(waitForEditor);
+        window.editorInstance.setContent(lesson.discussion_content || '');
+      }
+    }, 100);
+
+  } catch (err) {
+    console.error(err);
+    showAlert('Error loading lesson data.', 'error');
+  }
+}
 
 // 3. Handle Form Submit
+
 document.getElementById('lessonForm').addEventListener('submit', async (e) => {
   e.preventDefault();
 
   let content = '';
   if (window.editorInstance) {
-    content = window.editorInstance.getContent();
+    window.editorInstance.save();
+    content = document.getElementById('discussion_content').value;
   } else {
     content = document.getElementById('discussion_content').value;
   }
 
-  // Manually check if empty
   if (!content || content.trim() === '') {
-    showAlert('Please write some content for the lesson.', 'error');
+    showAlert('Please write some content.', 'error');
     return;
-  }
-
-  // Force TinyMCE to sync its content to the <textarea>
-  if (typeof tinymce !== 'undefined' && tinymce.get('discussion_content')) {
-    tinymce.triggerSave();
   }
 
   const payload = {
     title: document.getElementById('title').value.trim(),
-    // lesson_order: parseInt(document.getElementById('lesson_order').value),
     grade_level: document.getElementById('grade_level').value,
     description: document.getElementById('description').value.trim() || null,
-    discussion_content: document.getElementById('discussion_content').value,
-    // prerequisite_lesson_id: document.getElementById('prerequisite_lesson_id').value
-    //   ? parseInt(document.getElementById('prerequisite_lesson_id').value)
-      // : null
+    discussion_content: content
   };
-
-  if (!payload.title || !payload.discussion_content) {
-    showAlert('Title and Content are required.', 'error');
-    return;
-  }
 
   const saveBtn = document.getElementById('saveBtn');
   saveBtn.disabled = true;
@@ -106,46 +122,19 @@ document.getElementById('lessonForm').addEventListener('submit', async (e) => {
 
     const res = await fetch(url, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify(payload)
     });
 
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Save failed');
 
-        if (!res.ok) {
-      showAlert(data.error || 'Save failed', 'error');
-    } else {
-      showAlert(isEdit ? 'Lesson updated successfully!' : 'Lesson created successfully!', 'success');
-      
-      if (!isEdit) {
-        const newLessonId = data.lesson.lesson_id;
-        
-        // ─── PROCESS QUEUED QUIZZES ───
-        if (pendingQuizzes.length > 0) {
-          saveBtn.textContent = 'Saving quizzes...';
-          
-          for (const q of pendingQuizzes) {
-            await fetch('/api/quizzes/embed', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ ...q.payload, lesson_id: newLessonId })
-            });
-          }
-        }
+    showAlert('Lesson and quizzes saved successfully!', 'success');
+    setTimeout(() => { window.location.href = '/teacher/lessons.html'; }, 1500);
 
-        // Redirect to edit mode
-        setTimeout(() => {
-          window.location.href = `/teacher/lesson-editor.html?id=${newLessonId}`;
-        }, 500);
-      }
-    }
-    } catch (err) {
+  } catch (err) {
     console.error(err);
-    showAlert('Could not reach the server', 'error');
-  } finally {
+    showAlert(err.message, 'error');
     saveBtn.disabled = false;
     saveBtn.textContent = isEdit ? '💾 Save Changes' : '💾 Save Topic';
   }
@@ -266,69 +255,32 @@ async function saveQuizToLesson() {
   const text = document.getElementById('modalQuestionText').value.trim();
   const optionsRaw = document.getElementById('modalOptions').value;
   const correct = document.getElementById('modalCorrect').value.trim();
-  const saveBtn = document.getElementById('modalSaveBtn');
+  
+  if (!text || !correct) return alert('Question and correct answer are required.');
 
-  if (!text || !correct) {
-    alert('Question and correct answer are required.');
-    return;
-  }
+ 
 
   const options = optionsRaw.split(',').map(s => s.trim()).filter(Boolean);
-  if (!options.includes(correct)) {
-    alert('The correct answer must exactly match one of the options.');
-    return;
+  if (!options.includes(correct)) return alert('Correct answer must exactly match an option.');
+
+  // Instead of a hidden div, we insert a visible "Quiz Block" that TinyMCE won't delete
+  const blockId = 'quiz-block-' + Date.now();
+
+  const quizData = { text, options, correct };
+
+   const quizHtml = `
+    <div class="inline-quiz-placeholder" title='${JSON.stringify(quizData)}' style="border: 2px dashed #3b82f6; background: #eff6ff; padding: 15px; margin: 20px 0; border-radius: 8px;">
+      <strong>📝 Interactive Quiz:</strong> ${text}<br>
+      <em>(Options: ${options.join(', ')} | Correct: ${correct})</em>
+    </div>
+    <p><br></p>
+  `;
+
+  if (window.editorInstance) {
+    window.editorInstance.insertContent(quizHtml);
   }
 
-  // Build the payload
-  let payload = { quiz_type: type };
-  if (type === 'preposition') {
-    payload = { ...payload, question_text: text, options, correct_option_index: options.indexOf(correct), correct_answer: correct, explanation: document.getElementById('modalExplanation').value.trim() || null };
-  } else if (type === 'clause') {
-    payload = { ...payload, question_text: text, sentence: document.getElementById('modalSentence').value, options, correct_option_index: options.indexOf(correct), clause_text: correct, clause_type: document.getElementById('modalClauseType').value };
-  }
-
-  // ─── CREATE MODE vs EDIT MODE ───
-  if (!isEdit) {
-    // CREATE MODE: Save to memory
-    const tempId = 'temp_' + Date.now();
-    pendingQuizzes.push({ tempId, payload });
-    
-    // Insert placeholder into editor
-    const placeholder = `<div class="embedded-quiz" data-temp-id="${tempId}" style="border:2px dashed #4CAF50; padding:20px; margin:20px 0; background:#f0fdf4; text-align:center; color:#166534; font-weight:bold;">📝 [Interactive Quiz Queued: ${type.toUpperCase()}]</div><p><br></p>`;
-    window.editorInstance.insertContent(placeholder);
-    
-    closeQuizModal();
-    return;
-  }
-
-  // EDIT MODE: Save directly to DB
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving...';
-
-  try {
-    const res = await fetch('/api/quizzes/embed', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ ...payload, lesson_id: lessonId })
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-
-    const placeholder = `<div class="embedded-quiz" data-quiz-id="${data.quiz_id}" style="border:2px dashed #4CAF50; padding:20px; margin:20px 0; background:#f0fdf4; text-align:center; color:#166534; font-weight:bold;">📝 [Interactive Quiz Embedded: ${type.toUpperCase()}]</div><p><br></p>`;
-    
-    if (window.editorInstance) {
-      window.editorInstance.insertContent(placeholder);
-    }
-
-    closeQuizModal();
-  } catch (err) {
-    console.error(err);
-    alert(err.message || 'Failed to save quiz');
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Save & Insert';
-  }
+  closeQuizModal();
 }
 
 // 5. Utilities
