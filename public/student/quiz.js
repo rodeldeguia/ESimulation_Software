@@ -210,6 +210,17 @@ async function submitAnswers() {
       return;
     }
 
+        // If this is a pre-test, mark it as done and redirect to lesson
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('isPretest') === 'true') {
+      // Extract lesson ID from referrer or save it in the URL (simplest is to pass it)
+      // For now, let's just go back to the lessons list
+      localStorage.setItem(`pretest_done_${quiz.lesson_id}`, 'true');
+      alert('Pre-test submitted! Unlocking lesson...');
+      window.location.href = `/student/lesson.html?id=${quiz.lesson_id}`;
+      return;
+    }
+
     const result = await res.json();
     renderResults(result);
 

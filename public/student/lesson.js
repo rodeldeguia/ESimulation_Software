@@ -5,6 +5,11 @@ if (!token) window.location.href = '/auth/student-login.html';
 
 const params = new URLSearchParams(window.location.search);
 const lessonId = params.get('id');
+
+const urlParams = new URLSearchParams(window.location.search);
+const isPreview = urlParams.get('preview') === 'true';
+
+// If it's a preview, hide the "Take Quiz" final buttons
 if (!lessonId) window.location.href = '/student/lessons.html';
 
 async function loadLesson() {
@@ -13,12 +18,7 @@ async function loadLesson() {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 
-    if (res.status === 401) {
-      localStorage.clear();
-      window.location.href = '/auth/student-login.html';
-      return;
-    }
-
+    if (res.status === 401) { localStorage.clear(); window.location.href = '/auth/student-login.html'; return; }
     if (res.status === 403) {
       document.getElementById('lessonContent').innerHTML = `
         <div style="text-align:center; padding:40px;">
@@ -29,15 +29,39 @@ async function loadLesson() {
       `;
       return;
     }
-
-    if (res.status === 404) {
-      document.getElementById('lessonContent').textContent = 'Lesson not found.';
-      return;
-    }
+    if (res.status === 404) { document.getElementById('lessonContent').textContent = 'Lesson not found.'; return; }
 
     const lesson = await res.json();
 
-    // 1. Render the base lesson content
+    // ⬇️ 1. FETCH QUIZZES ONCE AND SAVE IT ⬇️
+        // ⬇️ 1. CHECK FOR PRE-TEST FIRST (Before rendering anything) ⬇️
+    let allQuizzes = [];
+    const quizRes = await fetch(`/api/lessons/${lessonId}/quizzes`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (quizRes.ok && !isPreview) {
+      allQuizzes = await quizRes.json();
+      
+      // Debug: see what the server actually sent
+      console.log("Quizzes received from server:", allQuizzes);
+      
+      // Find the pre-test safely
+      const preTest = allQuizzes.find(q => q.quiz_purpose === 'pretest');
+      
+      if (preTest) {
+        console.log("Pre-test found:", preTest);
+        const hasTakenPreTest = localStorage.getItem(`pretest_done_${lessonId}`);
+        
+        if (!hasTakenPreTest) {
+          console.log("Redirecting to quiz ID:", preTest.quiz_id);
+          window.location.href = `/student/quiz.html?id=${preTest.quiz_id}&isPretest=true&lesson_id=${lessonId}`;
+          return; 
+        }
+      }
+    }
+
+    // 2. Render Lesson
     document.getElementById('lessonContent').innerHTML = `
       <h1>${escapeHtml(lesson.title)}</h1>
       <p class="meta">Grade ${lesson.grade_level} • Lesson ${lesson.lesson_order}</p>
@@ -45,10 +69,8 @@ async function loadLesson() {
       <div id="quizSection" style="margin-top:40px; border-top:1px solid #e2e8f0; padding-top:24px;"></div>
     `;
 
-    // 2. Render Inline Quizzes
-        // --- RENDER INLINE QUIZZES ---
+    // 3. Render Inline Quizzes
     const embeddedQuizzes = document.querySelectorAll('.embedded-quiz');
-    
     for (const el of embeddedQuizzes) {
       const qId = el.getAttribute('data-quiz-id');
       
@@ -61,7 +83,6 @@ async function loadLesson() {
 
       if (quizData) {
         const options = typeof quizData.options === 'string' ? JSON.parse(quizData.options) : quizData.options;
-
         const optionsHtml = options.map((opt, i) => `
           <label style="display:block; padding:12px; margin-bottom:8px; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer; background:#fff;">
             <input type="radio" name="quiz_${qId}" value="${i}" style="margin-right:10px;">
@@ -78,40 +99,30 @@ async function loadLesson() {
             <div id="quiz_result_${qId}" style="margin-top:16px; font-weight:bold;"></div>
           </div>
         `;
-      } else {
-        el.innerHTML = `<div style="color:red; text-align:center;">Quiz data not found.</div>`;
       }
     }
-      
 
-    // 3. RESTORE THE FINAL QUIZ SECTION
+    // 4. Render Final Quizzes (Using the saved 'allQuizzes' variable)
     try {
-      const quizRes = await fetch(`/api/lessons/${lessonId}/quizzes`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (quizRes.ok) {
-        const quizzes = await quizRes.json();
-        const quizSection = document.getElementById('quizSection');
-        
-        if (quizzes.length > 0) {
-          quizSection.innerHTML = `
-            <h2 style="color:#1e3a8a; margin-bottom:16px;">Quizzes for this Lesson</h2>
-            ${quizzes.map(q => `
-              <div style="background:#f1f5f9; padding:16px; border-radius:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                  <strong>${escapeHtml(q.title)}</strong>
-                  <div style="color:#64748b; font-size:13px; margin-top:4px;">
-                    ${q.quiz_purpose === 'final' ? 'Final Quiz' : 'Review Quiz'} • 
-                    ${q.time_limit ? q.time_limit + ' min' : 'No time limit'}
-                  </div>
+      const quizSection = document.getElementById('quizSection');
+      if (allQuizzes.length > 0) {
+        quizSection.innerHTML = `
+          <h2 style="color:#1e3a8a; margin-bottom:16px;">Quizzes for this Lesson</h2>
+          ${allQuizzes.map(q => `
+            <div style="background:#f1f5f9; padding:16px; border-radius:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <strong>${escapeHtml(q.title)}</strong>
+                <div style="color:#64748b; font-size:13px; margin-top:4px;">
+                  ${q.quiz_purpose === 'final' ? 'Final Quiz' : 'Review Quiz'} • 
+                  ${q.time_limit ? q.time_limit + ' min' : 'No time limit'}
                 </div>
-                <a href="/student/quiz.html?id=${q.quiz_id}" style="background:#1e3a8a; color:white; padding:8px 16px; border-radius:6px; text-decoration:none; font-size:14px;">Take Quiz</a>
               </div>
-            `).join('')}
-          `;
-        }
+              <a href="/student/quiz.html?id=${q.quiz_id}" style="background:#1e3a8a; color:white; padding:8px 16px; border-radius:6px; text-decoration:none; font-size:14px;">Take Quiz</a>
+            </div>
+          `).join('')}
+        `;
       }
-    } catch (e) { console.error('Failed to load final quizzes', e); }
+    } catch (e) { console.error('Failed to render final quizzes', e); }
 
   } catch (err) {
     console.error('loadLesson error:', err);

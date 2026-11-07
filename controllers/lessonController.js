@@ -33,37 +33,40 @@ exports.list = async (req,res) =>{
 
 exports.getOne = async (req,res) => {
     try {
-
         const lesson = await Lesson.findById(req.params.id);
         if(!lesson) return res.status(404).json({error : 'lesson not found'});
-        
 
-        // check if the prerequesite lesson is passed
         if(req.user.role === 'student'){
             const unlocked = await Progress.isPrerequisitePassed(req.user.id, lesson.prerequisite_lesson_id);
-        
-
-            if (!unlocked) {
-                return res.status(403).json({ error: 'This lesson is locked. Complete the previous lesson first.' });
-                }
-
-            //  Ensure a progress row exists for this lesson
+            if (!unlocked) return res.status(403).json({ error: 'This lesson is locked. Complete the previous lesson first.' });
             await Progress.ensureExists({
-                student_id: req.user.id,
-                lesson_id: lesson.lesson_id,
-                initial_status: 'reading_required',
-                final_available: true
+                student_id: req.user.id, lesson_id: lesson.lesson_id,
+                initial_status: 'reading_required', final_available: true
             });
-        
         }
-            // Fetch embedded quizzes for this lesson if it's a student
-    if (req.user.role === 'student') {
-      const [embeds] = await pool.query('SELECT embed_quiz_id, question_text, options FROM embedded_quizzes WHERE lesson_id = ?', [lesson.lesson_id]);
-      lesson.embedded_quizzes = embeds;
-    }
+
+        // 1. Fetch embedded quizzes (For teacher edit AND student view)
+        const [embeds] = await pool.query('SELECT embed_quiz_id, question_text, options, correct_option_index FROM embedded_quizzes WHERE lesson_id = ?', [lesson.lesson_id]);
+        lesson.embedded_quizzes = embeds;
+
+        // 2. Fetch Pre-Test questions
+        const [preTestQuiz] = await pool.query("SELECT quiz_id FROM quizzes WHERE lesson_id = ? AND quiz_purpose = 'pretest'", [lesson.lesson_id]);
+        if (preTestQuiz.length > 0) {
+            const [questions] = await pool.query(
+                "SELECT question_text, options, correct_option_index, correct_answer FROM preposition_quiz WHERE quiz_id = ?", 
+                [preTestQuiz[0].quiz_id]
+            );
+            lesson.pre_tests = questions.map(q => ({
+                question_text: q.question_text,
+                options: q.options,
+                correct_option_index: q.correct_option_index,
+                correct_answer: q.correct_answer
+            }));
+        } else {
+            lesson.pre_tests = [];
+        }
 
         res.json(lesson);
-
     } catch (error){
         console.error('Lesson getOne Error:',error);
         res.status(500).json({error: 'Internal Server Error'});
@@ -73,6 +76,7 @@ exports.getOne = async (req,res) => {
 exports.getQuizzes = async (req, res) => {
     try {
         const quizzes = await Quiz.findByLesson(req.params.id);
+        console.log(`Quizzes for lesson ${req.params.id}:`, quizzes);
         res.json(quizzes);
     } catch (err) {
         console.error('getQuizzes error:', err);
@@ -119,46 +123,39 @@ async function extractAndSaveInlineQuizzes(lessonId, htmlContent, teacherId, poo
 
 exports.create = async(req,res) => {
     try {
-        if(req.user.role !== 'teacher' && req.user.role !== 'admin'){
-            return res.status(403).json({error : 'Only Teacher can create lesson'})
-        }
+        if(req.user.role !== 'teacher' && req.user.role !== 'admin') return res.status(403).json({error : 'Only Teacher can create lesson'});
+        const { title, description, discussion_content, grade_level, pre_tests } = req.body;
+        if(!title || !discussion_content || !grade_level) return res.status(400).json({error : 'Missing required fields'});
 
-        const { title, description, discussion_content, grade_level } = req.body;
-        
-        if(!title || !discussion_content || !grade_level) {
-            return res.status(400).json({error : 'Missing required fields (title, content, grade)'});
-        }
-
-        // 1. Create the lesson
         const lesson = await Lesson.createLesson({
-            teacher_id : req.user.id,
-            lesson_order: 999, // Temp order, admin will fix
-            title,
-            description,
-            discussion_content,
-            grade_level,
-            prerequisite_lesson_id: null,
-            passing_score: 70.00,
-            max_quiz_attempts: 3,
-            is_published : 0
+            teacher_id : req.user.id, lesson_order: 999, title, description,
+            discussion_content, grade_level, prerequisite_lesson_id: null,
+            passing_score: 70.00, max_quiz_attempts: 3, is_published : 0
         });
 
-        // 2. Check for inline quizzes and extract them
+        let finalContent = discussion_content;
         if (discussion_content.includes('inline-quiz-placeholder')) {
-            const processedHtml = await extractAndSaveInlineQuizzes(lesson.lesson_id, discussion_content, req.user.id, pool);
-            // Update the lesson with the clean HTML (replaces blue box with data-quiz-id)
-            await pool.query('UPDATE lessons SET discussion_content = ? WHERE lesson_id = ?', [processedHtml, lesson.lesson_id]);
-            
-            // Update the local variable so the frontend sees the new HTML
-            lesson.discussion_content = processedHtml;
+            finalContent = await extractAndSaveInlineQuizzes(lesson.lesson_id, discussion_content, req.user.id, pool);
+            await pool.query('UPDATE lessons SET discussion_content = ? WHERE lesson_id = ?', [finalContent, lesson.lesson_id]);
+            lesson.discussion_content = finalContent;
         }
 
-        // ✅ Fix: Use 'lesson' not 'newlesson'
-        res.status(201).json({
-            message : 'Lesson created as draft. Waiting for admin approval', 
-            lesson: lesson
-        });
+        if (pre_tests && pre_tests.length > 0) {
+            const [quizResult] = await pool.query(
+                `INSERT INTO quizzes (lesson_id, teacher_id, quiz_type, quiz_purpose, title, passing_score, is_published) 
+                 VALUES (?, ?, 'preposition', 'pretest', 'Lesson Pre-Test', 70.00, 1)`,
+                [lesson.lesson_id, req.user.id]
+            );
+            for (const q of pre_tests) {
+                await pool.query(
+                    `INSERT INTO preposition_quiz (quiz_id, question_text, options, correct_option_index, correct_answer, created_by) 
+                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    [quizResult.insertId, q.question_text, JSON.stringify(q.options), q.correct_option_index, q.correct_answer, req.user.id]
+                );
+            }
+        }
 
+        res.status(201).json({ message : 'Lesson created as draft.', lesson: lesson });
     } catch (error) {
         console.error('Lesson create Error:',error);
         res.status(500).json({error: 'Internal Server Error'});
@@ -168,44 +165,60 @@ exports.create = async(req,res) => {
 // Add to controllers/lessonController.js
 exports.update = async (req, res) => {
     try {
-        if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Teacher access only' });
-        }
-
+        if (req.user.role !== 'teacher' && req.user.role !== 'admin') return res.status(403).json({ error: 'Teacher access only' });
+        
         const lesson = await Lesson.findById(req.params.id);
         if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+        if (req.user.role === 'teacher' && lesson.teacher_id !== req.user.id) return res.status(403).json({ error: 'You can only edit your own lessons' });
 
-        if (req.user.role === 'teacher' && lesson.teacher_id !== req.user.id) {
-            return res.status(403).json({ error: 'You can only edit your own lessons' });
-        }
-
-        const { title, description, discussion_content, grade_level } = req.body;
-
-        // Validate to prevent SQL/Mass Assignment issues
-        if (!title || !discussion_content || !grade_level) {
-            return res.status(400).json({
-                error: 'title, discussion_content, and grade_level are required'
-            });
-        }
+        const { title, description, discussion_content, grade_level, pre_tests } = req.body;
+        if (!title || !discussion_content || !grade_level) return res.status(400).json({ error: 'title, discussion_content, and grade_level are required' });
 
         let finalContent = discussion_content;
-
-        // Check if the teacher added new inline quizzes during the edit
         if (discussion_content.includes('inline-quiz-placeholder')) {
             finalContent = await extractAndSaveInlineQuizzes(req.params.id, discussion_content, req.user.id, pool);
         }
 
-        const ok = await Lesson.update(req.params.id, {
-            title, 
-            description, 
-            discussion_content: finalContent, // Use the cleaned HTML
-            grade_level, 
-            passing_score: lesson.passing_score, // Keep existing
-            max_quiz_attempts: lesson.max_quiz_attempts,
-            is_published: lesson.is_published
-        });
-
+        const ok = await Lesson.update(req.params.id, { title, description, discussion_content: finalContent, grade_level });
         if (!ok) return res.status(404).json({ error: 'Lesson not found or no changes' });
+
+        // Handle Pre-Test Updates (Delete old ones, insert new ones)
+        if (pre_tests) {
+            const [existingPreTest] = await pool.query("SELECT quiz_id FROM quizzes WHERE lesson_id = ? AND quiz_purpose = 'pretest'", [req.params.id]);
+            
+            if (existingPreTest.length > 0) {
+                // Delete old questions and re-insert the new list
+                const quizId = existingPreTest[0].quiz_id;
+                await pool.query('DELETE FROM preposition_quiz WHERE quiz_id = ?', [quizId]);
+                
+                if (pre_tests.length > 0) {
+                    for (const q of pre_tests) {
+                        await pool.query(
+                            `INSERT INTO preposition_quiz (quiz_id, question_text, options, correct_option_index, correct_answer, created_by) 
+                             VALUES (?, ?, ?, ?, ?, ?)`,
+                            [quizId, q.question_text, JSON.stringify(q.options), q.correct_option_index, q.correct_answer, req.user.id]
+                        );
+                    }
+                } else {
+                    // If they deleted all pre-tests, delete the quiz container too
+                    await pool.query('DELETE FROM quizzes WHERE quiz_id = ?', [quizId]);
+                }
+            } else if (pre_tests.length > 0) {
+                // Create new Pre-Test if one didn't exist
+                const [quizResult] = await pool.query(
+                    `INSERT INTO quizzes (lesson_id, teacher_id, quiz_type, quiz_purpose, title, passing_score, is_published) 
+                     VALUES (?, ?, 'preposition', 'pretest', 'Lesson Pre-Test', 70.00, 1)`,
+                    [req.params.id, req.user.id]
+                );
+                for (const q of pre_tests) {
+                    await pool.query(
+                        `INSERT INTO preposition_quiz (quiz_id, question_text, options, correct_option_index, correct_answer, created_by) 
+                         VALUES (?, ?, ?, ?, ?, ?)`,
+                        [quizResult.insertId, q.question_text, JSON.stringify(q.options), q.correct_option_index, q.correct_answer, req.user.id]
+                    );
+                }
+            }
+        }
 
         res.json({ message: 'Lesson updated successfully', discussion_content: finalContent });
     } catch (err) {

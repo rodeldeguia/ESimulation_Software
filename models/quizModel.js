@@ -9,9 +9,11 @@ module.exports = {
         return rows[0];
     },
 
-    async findByLesson (lessonId){
-
-        const [rows] = await pool.query('SELECT *FROM quizzes WHERE lesson_id = ?',[lessonId]);
+       async findByLesson(lessonId) {
+        const [rows] = await pool.query(
+            'SELECT quiz_id, quiz_purpose, title, time_limit FROM quizzes WHERE lesson_id = ? AND is_published = 1 ORDER BY quiz_id',
+            [lessonId]
+        );
         return rows;
     },
 
