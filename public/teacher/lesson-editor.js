@@ -11,11 +11,14 @@ if (user.role !== 'teacher' && user.role !== 'admin') {
 const params = new URLSearchParams(window.location.search);
 const lessonId = params.get('id'); // If present, we are editing
 const isEdit = !!lessonId;
+let preTestQuestions = [];
+let finalQuizQuestions = [];
 
 // 1. Initialize the editor
 initLessonEditor('#discussion_content');
 
 let pendingQuizzes = []; // Holds quizzes before the lesson is saved
+
 
 // 2. Load data if editing
 async function loadLessonData() {
@@ -28,70 +31,90 @@ async function loadLessonData() {
     const lesson = await res.json();
 
     document.getElementById('title').value = lesson.title;
-    // document.getElementById('lesson_order').value = lesson.lesson_order;
     document.getElementById('grade_level').value = lesson.grade_level;
     document.getElementById('description').value = lesson.description || '';
-    // document.getElementById('prerequisite_lesson_id').value = lesson.prerequisite_lesson_id || '';
 
-    // Update UI
+    // ⬇️ 1. LOAD PRE-TEST QUESTIONS ⬇️
+      // ⬇️ 1. LOAD PRE-TEST QUESTIONS ⬇️
+    if (lesson.pre_tests && lesson.pre_tests.length > 0) {
+      preTestQuestions = lesson.pre_tests;
+      document.getElementById('preTestBadge').style.display = 'inline-block'; // Show the badge!
+    }
+
+        // ⬇️ Load Final Quiz Questions ⬇️
+    if (lesson.final_quizzes && lesson.final_quizzes.length > 0) {
+      finalQuizQuestions = lesson.final_quizzes;
+      document.getElementById('finalQuizBadge').style.display = 'inline-block';
+    }
     document.getElementById('pageTitle').textContent = 'Edit Grammar Topic';
     document.getElementById('pageSubtitle').textContent = `Editing: ${lesson.title}`;
     document.getElementById('saveBtn').textContent = '💾 Save Changes';
 
-    // Wait for TinyMCE to load, then set content
-    const setContent = () => {
-      const editor = tinymce.get('discussion_content');
-      if (editor) {
-        editor.setContent(lesson.discussion_content || '');
-      } else {
-        setTimeout(setContent, 100); // keep checking
-      }
-    };
-    setContent();
+    // ⬇️ 2. LOAD EDITOR CONTENT & RESTORE INLINE QUIZZES ⬇️
+    // ⬇️ 2. LOAD EDITOR CONTENT & RESTORE INLINE QUIZZES ⬇️
+    const waitForEditor = setInterval(() => {
+      if (window.editorInstance) {
+        clearInterval(waitForEditor);
+        
+        let htmlContent = lesson.discussion_content || '';
 
+        if (lesson.embedded_quizzes && lesson.embedded_quizzes.length > 0) {
+          lesson.embedded_quizzes.forEach(quiz => {
+            const regex = new RegExp(`<div class="embedded-quiz" data-quiz-id="${quiz.embed_quiz_id}"></div>`, 'g');
+            
+            // Create the visible blue box
+            const optionsArray = typeof quiz.options === 'string' ? JSON.parse(quiz.options) : quiz.options;
+            const correctText = optionsArray[quiz.correct_option_index] || 'Unknown'; // ⬅️ FIXED
+
+            const quizData = { text: quiz.question_text, options: optionsArray, correct: correctText };
+            const visibleBox = `
+              <div class="inline-quiz-placeholder" title='${JSON.stringify(quizData)}' style="border: 2px dashed #3b82f6; background: #eff6ff; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <strong>📝 Interactive Quiz:</strong> ${quiz.question_text}<br>
+                <em>(Options: ${optionsArray.join(', ')} | Correct: ${correctText})</em>
+              </div>`;
+            
+            htmlContent = htmlContent.replace(regex, visibleBox);
+          });
+        }
+
+        window.editorInstance.setContent(htmlContent);
+      }
+    }, 100);
   } catch (err) {
     console.error(err);
     showAlert('Error loading lesson data.', 'error');
   }
 }
 
-if (isEdit) loadLessonData();
+if (isEdit) loadLessonData();// 3. Handle Form Submit
 
-// 3. Handle Form Submit
 document.getElementById('lessonForm').addEventListener('submit', async (e) => {
   e.preventDefault();
 
   let content = '';
   if (window.editorInstance) {
-    content = window.editorInstance.getContent();
+    window.editorInstance.save();
+    content = document.getElementById('discussion_content').value;
   } else {
     content = document.getElementById('discussion_content').value;
   }
 
-  // Manually check if empty
   if (!content || content.trim() === '') {
     showAlert('Please write some content for the lesson.', 'error');
     return;
   }
 
-  // Force TinyMCE to sync its content to the <textarea>
-  if (typeof tinymce !== 'undefined' && tinymce.get('discussion_content')) {
-    tinymce.triggerSave();
-  }
-
   const payload = {
     title: document.getElementById('title').value.trim(),
-    // lesson_order: parseInt(document.getElementById('lesson_order').value),
     grade_level: document.getElementById('grade_level').value,
     description: document.getElementById('description').value.trim() || null,
-    discussion_content: document.getElementById('discussion_content').value,
-    // prerequisite_lesson_id: document.getElementById('prerequisite_lesson_id').value
-    //   ? parseInt(document.getElementById('prerequisite_lesson_id').value)
-      // : null
+    discussion_content: content,
+    pre_tests: preTestQuestions ,// ⬅️ Send pre-test data
+    final_quizzes: finalQuizQuestions
   };
 
-  if (!payload.title || !payload.discussion_content) {
-    showAlert('Title and Content are required.', 'error');
+  if (!payload.title) {
+    showAlert('Lesson Title is required.', 'error');
     return;
   }
 
@@ -106,46 +129,65 @@ document.getElementById('lessonForm').addEventListener('submit', async (e) => {
 
     const res = await fetch(url, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
+    // ⬇️ THE FIX for "data is not defined" ⬇️
+    const resultData = await res.json();
 
-        if (!res.ok) {
-      showAlert(data.error || 'Save failed', 'error');
-    } else {
-      showAlert(isEdit ? 'Lesson updated successfully!' : 'Lesson created successfully!', 'success');
-      
-      if (!isEdit) {
-        const newLessonId = data.lesson.lesson_id;
-        
-        // ─── PROCESS QUEUED QUIZZES ───
-        if (pendingQuizzes.length > 0) {
-          saveBtn.textContent = 'Saving quizzes...';
-          
-          for (const q of pendingQuizzes) {
-            await fetch('/api/quizzes/embed', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ ...q.payload, lesson_id: newLessonId })
-            });
-          }
-        }
-
-        // Redirect to edit mode
-        setTimeout(() => {
-          window.location.href = `/teacher/lesson-editor.html?id=${newLessonId}`;
-        }, 500);
-      }
+    if (!res.ok) {
+      throw new Error(resultData.error || 'Save failed');
     }
-    } catch (err) {
+
+    // Get the ID correctly
+    const savedLessonId = isEdit ? lessonId : resultData.lesson.lesson_id;
+    
+    if (!savedLessonId) throw new Error('Could not find lesson ID in response');
+
+    // Handle inline quizzes if any
+    if (!isEdit && pendingQuizzes.length > 0) {
+      saveBtn.textContent = 'Saving Quizzes...';
+      let updatedContent = content;
+      
+      for (const q of pendingQuizzes) {
+        const qRes = await fetch('/api/quizzes/embed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ ...q.payload, lesson_id: savedLessonId })
+        });
+        
+        if (qRes.ok) {
+          const qData = await qRes.json();
+          q.realId = qData.quiz_id; 
+        }
+      }
+
+      // Fetch the lesson again to get exact HTML, replace IDs, and update
+      const fetchRes = await fetch(`/api/lessons/${savedLessonId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const freshLesson = await fetchRes.json();
+      let finalContent = freshLesson.discussion_content;
+
+      for (const q of pendingQuizzes) {
+        if (q.realId) {
+          const regex = new RegExp(`data-temp-id="?${q.tempId}"?`, 'g');
+          finalContent = finalContent.replace(regex, `data-quiz-id="${q.realId}"`);
+        }
+      }
+
+      await fetch(`/api/lessons/${savedLessonId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ ...payload, discussion_content: finalContent })
+      });
+    }
+
+    showAlert('Lesson saved successfully! Redirecting...', 'success');
+    setTimeout(() => { window.location.href = '/teacher/lessons.html'; }, 1500);
+
+  } catch (err) {
     console.error(err);
-    showAlert('Could not reach the server', 'error');
-  } finally {
+    showAlert(err.message, 'error');
     saveBtn.disabled = false;
     saveBtn.textContent = isEdit ? '💾 Save Changes' : '💾 Save Topic';
   }
@@ -266,69 +308,136 @@ async function saveQuizToLesson() {
   const text = document.getElementById('modalQuestionText').value.trim();
   const optionsRaw = document.getElementById('modalOptions').value;
   const correct = document.getElementById('modalCorrect').value.trim();
-  const saveBtn = document.getElementById('modalSaveBtn');
+  
+  if (!text || !correct) return alert('Question and correct answer are required.');
 
-  if (!text || !correct) {
-    alert('Question and correct answer are required.');
-    return;
-  }
+ 
 
   const options = optionsRaw.split(',').map(s => s.trim()).filter(Boolean);
-  if (!options.includes(correct)) {
-    alert('The correct answer must exactly match one of the options.');
+  if (!options.includes(correct)) return alert('Correct answer must exactly match an option.');
+
+  // Instead of a hidden div, we insert a visible "Quiz Block" that TinyMCE won't delete
+  const blockId = 'quiz-block-' + Date.now();
+
+  const quizData = { text, options, correct };
+
+   const quizHtml = `
+    <div class="inline-quiz-placeholder" title='${JSON.stringify(quizData)}' style="border: 2px dashed #3b82f6; background: #eff6ff; padding: 15px; margin: 20px 0; border-radius: 8px;">
+      <strong>📝 Interactive Quiz:</strong> ${text}<br>
+      <em>(Options: ${options.join(', ')} | Correct: ${correct})</em>
+    </div>
+    <p><br></p>
+  `;
+
+  if (window.editorInstance) {
+    window.editorInstance.insertContent(quizHtml);
+  }
+
+  closeQuizModal();
+}
+
+// ═══════════════════════════════════════════════════════
+// PRE-TEST LOGIC
+// ═══════════════════════════════════════════════════════
+let pendingPreTests = []; // Holds pre-test questions before saving
+
+function openPreTestModal() {
+  document.getElementById('preTestModal').style.display = 'flex';
+  renderModalPreTestList();
+}
+
+function closePreTestModal() {
+  document.getElementById('preTestModal').style.display = 'none';
+}
+
+
+
+// ═══════════════════════════════════════════════════════
+// PRE-TEST BUILDER LOGIC
+// ═══════════════════════════════════════════════════════
+
+function addPreTestQuestion() {
+  const text = document.getElementById('ptQuestion').value.trim();
+  const optionsRaw = document.getElementById('ptOptions').value;
+  const correct = document.getElementById('ptCorrect').value.trim();
+
+  if (!text || !correct) return alert('Question and correct answer are required.');
+  
+  const options = optionsRaw.split(',').map(s => s.trim()).filter(Boolean);
+  if (!options.includes(correct)) return alert('Correct answer must exactly match an option.');
+
+  preTestQuestions.push({
+    question_text: text,
+    options,
+    correct_option_index: options.indexOf(correct),
+    correct_answer: correct
+  });
+
+  // Clear inputs
+  document.getElementById('ptQuestion').value = '';
+  document.getElementById('ptOptions').value = '';
+  document.getElementById('ptCorrect').value = '';
+    document.getElementById('preTestBadge').style.display = 'inline-block';
+
+  renderModalPreTestList();
+}
+
+function renderModalPreTestList() {
+  const list = document.getElementById('modalPreTestList');
+  if (preTestQuestions.length === 0) {
+    list.innerHTML = '<p style="color:#64748b; font-size:14px; text-align:center;">No questions added yet.</p>';
     return;
   }
 
-  // Build the payload
-  let payload = { quiz_type: type };
-  if (type === 'preposition') {
-    payload = { ...payload, question_text: text, options, correct_option_index: options.indexOf(correct), correct_answer: correct, explanation: document.getElementById('modalExplanation').value.trim() || null };
-  } else if (type === 'clause') {
-    payload = { ...payload, question_text: text, sentence: document.getElementById('modalSentence').value, options, correct_option_index: options.indexOf(correct), clause_text: correct, clause_type: document.getElementById('modalClauseType').value };
-  }
+  list.innerHTML = preTestQuestions.map((q, i) => `
+    <div style="background:white; border:1px solid #e2e8f0; padding:12px; margin-bottom:8px; border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <strong>Q${i+1}:</strong> ${escapeHtml(q.question_text)}<br>
+        <span style="font-size:12px; color:#64748b;">Options: ${q.options.join(', ')} | Correct: ${q.correct_answer}</span>
+      </div>
+      <div>
+        <button type="button" onclick="editPreTestQuestion(${i})" style="background:#e0e7ff; color:#3730a3; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; margin-right:4px;">Edit</button>
+        <button type="button" onclick="removePreTestQuestion(${i})" style="background:#fee2e2; color:#dc2626; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Remove</button>
+      </div>
+    </div>
+  `).join('');
+}
 
-  // ─── CREATE MODE vs EDIT MODE ───
-  if (!isEdit) {
-    // CREATE MODE: Save to memory
-    const tempId = 'temp_' + Date.now();
-    pendingQuizzes.push({ tempId, payload });
-    
-    // Insert placeholder into editor
-    const placeholder = `<div class="embedded-quiz" data-temp-id="${tempId}" style="border:2px dashed #4CAF50; padding:20px; margin:20px 0; background:#f0fdf4; text-align:center; color:#166534; font-weight:bold;">📝 [Interactive Quiz Queued: ${type.toUpperCase()}]</div><p><br></p>`;
-    window.editorInstance.insertContent(placeholder);
-    
-    closeQuizModal();
-    return;
-  }
+function removePreTestQuestion(index) {
+  preTestQuestions.splice(index, 1);
+  renderModalPreTestList();
+}
 
-  // EDIT MODE: Save directly to DB
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving...';
+function editPreTestQuestion(index) {
+  const q = preTestQuestions[index];
+  document.getElementById('ptQuestion').value = q.question_text;
+  document.getElementById('ptOptions').value = q.options.join(', ');
+  document.getElementById('ptCorrect').value = q.correct_answer;
+  
+  // Remove it from the list so when they save, it updates instead of duplicating
+  preTestQuestions.splice(index, 1);
+  renderModalPreTestList();
+}
 
-  try {
-    const res = await fetch('/api/quizzes/embed', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ ...payload, lesson_id: lessonId })
+function previewPreTest() {
+  if (preTestQuestions.length === 0) return alert('Add some questions first!');
+  
+  const win = window.open('', '_blank');
+  let html = '<html><head><title>Pre-Test Preview</title><style>body{font-family:sans-serif; padding:40px; max-width:800px; margin:auto;}</style></head><body>';
+  html += '<h1>Pre-Test Preview</h1>';
+  
+  preTestQuestions.forEach((q, i) => {
+    html += `<div style="margin-bottom:20px; border:1px solid #ccc; padding:15px; border-radius:8px;">`;
+    html += `<strong>Q${i+1}: ${q.question_text}</strong><br><br>`;
+    q.options.forEach(opt => {
+      html += `<label style="display:block; margin-bottom:5px;"><input type="radio" name="q${i}"> ${opt}</label>`;
     });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-
-    const placeholder = `<div class="embedded-quiz" data-quiz-id="${data.quiz_id}" style="border:2px dashed #4CAF50; padding:20px; margin:20px 0; background:#f0fdf4; text-align:center; color:#166534; font-weight:bold;">📝 [Interactive Quiz Embedded: ${type.toUpperCase()}]</div><p><br></p>`;
-    
-    if (window.editorInstance) {
-      window.editorInstance.insertContent(placeholder);
-    }
-
-    closeQuizModal();
-  } catch (err) {
-    console.error(err);
-    alert(err.message || 'Failed to save quiz');
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Save & Insert';
-  }
+    html += `</div>`;
+  });
+  
+  html += '</body></html>';
+  win.document.write(html);
+  win.document.close();
 }
 
 // 5. Utilities
@@ -348,3 +457,7 @@ function escapeHtml(str) {
   div.textContent = str || '';
   return div.innerHTML;
 }
+
+// ═══════════════════════════════════════════════════════
+// FINAL QUIZ MODAL LOGIC
+// ═══════════════════════════════════════════════════════

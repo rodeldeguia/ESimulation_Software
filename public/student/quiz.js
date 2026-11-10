@@ -210,6 +210,17 @@ async function submitAnswers() {
       return;
     }
 
+        // If this is a pre-test, mark it as done and redirect to lesson
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('isPretest') === 'true') {
+      // Extract lesson ID from referrer or save it in the URL (simplest is to pass it)
+      // For now, let's just go back to the lessons list
+      localStorage.setItem(`pretest_done_${quiz.lesson_id}`, 'true');
+      alert('Pre-test submitted! Unlocking lesson...');
+      window.location.href = `/student/lesson.html?id=${quiz.lesson_id}`;
+      return;
+    }
+
     const result = await res.json();
     renderResults(result);
 
@@ -369,8 +380,119 @@ console.log(q);
       `).join('')}
     </ul>
   `;
-} else if (q.question_type === 'text_input') {
+    } else if (q.question_type === 'text_input') {
+    // Check if this is an Irregular Verb question (has blank_fields)
+    if (q.blank_fields) {
+      const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
+      const answersObj = answers[currentIdx].data || {};
+
+      const renderInput = (label, field, value) => {
+        const isBlank = blanks.includes(field);
+        return `
+          <div style="flex:1; text-align:center;">
+            <div style="font-weight:bold; font-size:14px; margin-bottom:8px;">${label}</div>
+            ${isBlank 
+              ? `<input type="text" id="iv_${field}" value="${value || ''}" oninput="recordIrregularVerb('${field}', this.value)" style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:6px; text-align:center;" placeholder="Fill in...">`
+              : `<div style="padding:12px; background:#f1f5f9; border-radius:6px; border:1px solid #e2e8f0; color:#475569;">${value}</div>`
+            }
+          </div>
+        `;
+      };
+
+      bodyHtml = `
+        <div style="background:#f8fafc; padding:24px; border-radius:8px; border:1px dashed #94a3b8; margin-bottom:24px;">
+          <div style="display:flex; gap:16px; align-items:flex-end;">
+            ${renderInput('Present', 'present', q.present_form)}
+            ${renderInput('Past', 'past', q.past_form)}
+            ${renderInput('Future', 'future', q.future_form)}
+            ${renderInput('Past Participle', 'past_participle', q.past_participle)}
+          </div>
+        </div>
+      `;
+    } else {
+      // Standard text input
+      bodyHtml = `
+        <input type="text" id="textAnswer" value="${answers[currentIdx].text || ''}" 
+               oninput="recordTextAnswer(this.value)" 
+               style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:16px;">
+      `;
+    }
+  
+    // Check if this is an Irregular Verb question (has blank_fields)
+    if (q.blank_fields) {
+      const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
+      const answersObj = answers[currentIdx].data || {};
+
+      const renderInput = (label, field, value) => {
+        const isBlank = blanks.includes(field);
+        return `
+          <div style="flex:1; text-align:center;">
+            <div style="font-weight:bold; font-size:14px; margin-bottom:8px;">${label}</div>
+            ${isBlank 
+              ? `<input type="text" id="iv_${field}" value="${value || ''}" oninput="recordIrregularVerb('${field}', this.value)" style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:6px; text-align:center;" placeholder="Fill in...">`
+              : `<div style="padding:12px; background:#f1f5f9; border-radius:6px; border:1px solid #e2e8f0; color:#475569;">${value}</div>`
+            }
+          </div>
+        `;
+      };
+
+      bodyHtml = `
+        <div style="background:#f8fafc; padding:24px; border-radius:8px; border:1px dashed #94a3b8; margin-bottom:24px;">
+          <div style="display:flex; gap:16px; align-items:flex-end;">
+            ${renderInput('Present', 'present', q.present_form)}
+            ${renderInput('Past', 'past', q.past_form)}
+            ${renderInput('Future', 'future', q.future_form)}
+            ${renderInput('Past Participle', 'past_participle', q.past_participle)}
+          </div>
+        </div>
+      `;
+    } else {
+      // Standard text input
+      bodyHtml = `
+        <input type="text" id="textAnswer" value="${answers[currentIdx].text || ''}" 
+               oninput="recordTextAnswer(this.value)" 
+               style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:16px;">
+      `;
+    }
+  
     // Show the prompt (e.g., present form + ask_for)
+// to reqad th eblack field
+    if (q.blank_fields) {
+      const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
+      const answersObj = answers[currentIdx].data || {};
+
+      const renderInput = (label, field, value) => {
+        const isBlank = blanks.includes(field);
+        return `
+          <div style="flex:1; text-align:center;">
+            <div style="font-weight:bold; font-size:14px; margin-bottom:8px;">${label}</div>
+            ${isBlank 
+              ? `<input type="text" id="iv_${field}" value="${value || ''}" oninput="recordIrregularVerb('${field}', this.value)" style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:6px; text-align:center;" placeholder="Fill in...">`
+              : `<div style="padding:12px; background:#f1f5f9; border-radius:6px; border:1px solid #e2e8f0; color:#475569;">${value}</div>`
+            }
+          </div>
+        `;
+      };
+
+      bodyHtml = `
+        <div style="background:#f8fafc; padding:24px; border-radius:8px; border:1px dashed #94a3b8; margin-bottom:24px;">
+          <div style="display:flex; gap:16px; align-items:flex-end;">
+            ${renderInput('Present', 'present', q.present_form)}
+            ${renderInput('Past', 'past', q.past_form)}
+            ${renderInput('Future', 'future', q.future_form)}
+            ${renderInput('Past Participle', 'past_participle', q.past_participle)}
+          </div>
+        </div>
+      `;
+    } else {
+      // Standard text input (like SVA or Phrasal Verb)
+      bodyHtml = `
+        <input type="text" id="textAnswer" value="${answers[currentIdx].text || ''}" 
+               oninput="recordTextAnswer(this.value)" 
+               style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:16px;">
+      `;
+    }
+  
     const promptHtml = q.present_form
       ? `<div style="background:#f1f5f9; padding:16px; border-radius:8px; margin-bottom:20px;">
            <div style="font-size:14px; color:#64748b; margin-bottom:6px;">Verb:</div>
@@ -454,38 +576,34 @@ console.log(q);
   //       ${wordCount} word${wordCount !== 1 ? 's' : ''}
   //     </div>
   //   `;
-    } else if (q.question_type === 'pattern_choice') {
+  } else if (q.question_type === 'pattern_choice') {
     const currentText = answers[currentIdx].text || '';
     const selectedPattern = answers[currentIdx].selected_pattern || '';
 
     bodyHtml = `
       <div style="background:#f1f5f9; padding:14px; border-radius:8px; margin-bottom:16px;">
         <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
-          Write a sentence using one of these patterns: <strong>${q.allowed_patterns.join(', ')}</strong>
-        </div>
-        <div style="font-size:12px; color:#94a3b8;">
-          ${q.min_sentence_length}–${q.max_sentence_length} words
+          Write a sentence and identify its pattern.
         </div>
       </div>
 
       <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your sentence:</label>
       <textarea id="textAnswer" rows="3"
                 placeholder="Write your sentence here..."
-                oninput="recordTextAnswer(this.value); updateWordCount(this.value)"
+                oninput="recordTextAnswer(this.value)"
                 style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px; outline:none; resize:vertical;"
-                autofocus>${escapeHtml(currentText)}</textarea>
-
-      <div style="text-align:right; font-size:12px; color:#64748b; margin-top:6px;" id="wordCountDisplay"></div>
+                autofocus>${currentText}</textarea>
 
       <label style="display:block; font-size:13px; color:#334155; margin:16px 0 8px; font-weight:600;">Select the sentence pattern:</label>
       <select onchange="recordPattern(this.value)"
               style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px;">
         <option value="">-- Select pattern --</option>
         ${q.allowed_patterns.map(p => `
-          <option value="${escapeHtml(p)}" ${selectedPattern === p ? 'selected' : ''}>${escapeHtml(p)}</option>
+          <option value="${p}" ${selectedPattern === p ? 'selected' : ''}>${p}</option>
         `).join('')}
       </select>
     `;
+  
     } else if (q.question_type === 'sentence_construction') {
   const currentText = answers[currentIdx].text || '';
   const currentVerbAnswer = answers[currentIdx].phrasal_verb_answer || '';
@@ -612,14 +730,18 @@ function updateWordCount(value) {
   const words = value.trim() ? value.trim().split(/\s+/).length : 0;
   el.textContent = `${words} word${words !== 1 ? 's' : ''}`;
 }
-function recordPattern(pattern) {
-  answers[currentIdx].selected_pattern = pattern;
-}
+function recordPattern(val) {
+  answers[currentIdx].selected_pattern = val; }
 
 function recordPhrasalVerb(value) {
   answers[currentIdx].phrasal_verb_answer = value;
 }
 
+
+function recordIrregularVerb(field, value) {
+  if (!answers[currentIdx].data) answers[currentIdx].data = {};
+  answers[currentIdx].data[field] = value;
+}
 // ─────────────────────────────────────────
 // START
 // ─────────────────────────────────────────

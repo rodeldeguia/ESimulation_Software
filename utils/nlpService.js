@@ -211,93 +211,46 @@ function validateSvaWithNlp(text, question) {
 // SENTENCE PATTERN VALIDATOR
 // ═══════════════════════════════════════════════════════
 
-function validateSentencePatternWithNlp(text, selectedPattern, question) {
-  if (!text || !text.trim()) {
-    return { isCorrect: false, reason: 'Empty sentence' };
-  }
-  if (!selectedPattern) {
-    return { isCorrect: false, reason: 'Please select a pattern' };
-  }
+function validateSentencePatternWithNlp(text, selectedPattern) {
+  if (!text || !text.trim()) return { isCorrect: false, reason: 'Empty sentence' };
+  if (!selectedPattern) return { isCorrect: false, reason: 'No pattern selected' };
 
-  // 1. Word count
-  const words = text.trim().split(/\s+/).filter(w => w.length > 0);
-  if (words.length < (question.min_sentence_length || 1)) {
-    return { isCorrect: false, reason: `Too short — need at least ${question.min_sentence_length} words` };
-  }
-  if (words.length > (question.max_sentence_length || 50)) {
-    return { isCorrect: false, reason: `Too long — max ${question.max_sentence_length} words` };
-  }
-
-  // 2. Pattern must match
-  const selected = String(selectedPattern).trim().toUpperCase();
-  const target = String(question.target_pattern).trim().toUpperCase();
-  if (selected !== target) {
-    return { isCorrect: false, reason: `Wrong pattern. Correct is: ${question.target_pattern}` };
-  }
-
-  // 3. Parse with NLP
   const doc = nlp.readDoc(text);
-  const tokenList = [];
-  doc.tokens().each((t) => {
-    tokenList.push({ value: t.out(its.value).toLowerCase(), pos: t.out(its.pos) });
+  const tokens = doc.tokens();
+  
+  let hasSubject = false;
+  let hasVerb = false;
+  let hasObject = false;
+  let hasLinkingVerb = false;
+  let nounCount = 0;
+
+  tokens.each((t) => {
+    const pos = t.out(its.pos);
+    const val = t.out(its.value).toLowerCase();
+    
+    if (pos === 'NOUN') nounCount++;
+    if (pos === 'PRON' || pos === 'NOUN') hasSubject = true;
+    if (pos === 'VERB') hasVerb = true;
+    if (['is', 'am', 'are', 'was', 'were', 'seem', 'become'].includes(val)) hasLinkingVerb = true;
   });
 
-  const posList = tokenList.map(t => t.pos);
-  const nounCount = posList.filter(p => p === 'NOUN').length;
-  const pronCount = posList.filter(p => p === 'PRON').length;
-  const verbCount = posList.filter(p => p === 'VERB' || p === 'AUX').length;
-  const adjCount = posList.filter(p => p === 'ADJ').length;
+  if (!hasSubject || !hasVerb) {
+    return { isCorrect: false, reason: 'Sentence must have a subject and a verb.' };
+  }
 
-  const hasLinkingVerb = tokenList.some(t =>
-    ['is', 'am', 'are', 'was', 'were', 'seem', 'seems', 'seemed', 'become', 'becomes', 'became', 'look', 'looks', 'looked', 'feel', 'feels', 'felt'].includes(t.value)
-  );
-
-  // 4. Pattern-specific checks
-  const tag = target.replace(/[-\s]/g, '');   // "S-V-O" → "SVO"
+  const tag = selectedPattern.replace(/[-\s]/g, ''); // "S-V-O" -> "SVO"
 
   if (tag === 'SVO' || tag === 'STVO') {
-    // Needs subject + verb + object (noun after verb)
-    if (verbCount === 0) {
-      return { isCorrect: false, reason: 'S-V-O requires a verb' };
-    }
-    if (nounCount < 2 && pronCount < 2) {
-      return { isCorrect: false, reason: 'S-V-O requires a subject AND an object (noun after the verb)' };
-    }
-    if (hasLinkingVerb && adjCount > 0) {
-      return { isCorrect: false, reason: 'Looks like S-LV-C (linking verb + adjective), not S-V-O' };
-    }
+    if (nounCount < 2) return { isCorrect: false, reason: 'S-V-O requires an object (a second noun).' };
+    if (hasLinkingVerb) return { isCorrect: false, reason: 'You selected S-V-O, but the sentence has a linking verb (S-LV-C).' };
+  } else if (tag === 'SIV') {
+    if (nounCount > 1) return { isCorrect: false, reason: 'S-IV requires an intransitive verb (no object). Your sentence has an object.' };
+    if (hasLinkingVerb) return { isCorrect: false, reason: 'S-IV requires an action verb, not a linking verb.' };
+  } else if (tag === 'SLVC') {
+    if (!hasLinkingVerb) return { isCorrect: false, reason: 'S-LV-C requires a linking verb (is, are, seems, etc.).' };
   }
 
-  if (tag === 'SIV') {
-    // Subject + intransitive verb — NO object after verb
-    if (verbCount === 0) {
-      return { isCorrect: false, reason: 'S-IV requires a verb' };
-    }
-    if (hasLinkingVerb) {
-      return { isCorrect: false, reason: 'Looks like S-LV-C (linking verb), not S-IV' };
-    }
-    // Count nouns AFTER the verb — should be 0 for intransitive
-    const verbIdx = posList.findIndex(p => p === 'VERB');
-    if (verbIdx >= 0) {
-      const nounsAfterVerb = posList.slice(verbIdx + 1).filter(p => p === 'NOUN').length;
-      if (nounsAfterVerb > 0) {
-        return { isCorrect: false, reason: 'S-IV should not have an object (noun) after the verb' };
-      }
-    }
-  }
-
-  if (tag === 'SLVC') {
-    // Subject + Linking Verb + Complement
-    if (!hasLinkingVerb) {
-      return { isCorrect: false, reason: 'S-LV-C requires a linking verb (is, are, seems, becomes, feels, etc.)' };
-    }
-    if (adjCount === 0 && nounCount < 2 && pronCount < 2) {
-      // Need a complement (adjective or noun) after the linking verb
-      return { isCorrect: false, reason: 'S-LV-C requires a complement (adjective or noun after the linking verb)' };
-    }
-  }
-
-  return { isCorrect: true };
+  return { isCorrect: true, reason: 'Correct! Your sentence matches the pattern.' };
 }
 
 module.exports = {

@@ -8,6 +8,24 @@ module.exports = {
         return rows;
     },
 
+    async findlLessonWithoutQuiz() {
+    const [rows] = await pool.query(`
+        SELECT l.lesson_id,
+       l.lesson_order,
+       l.title,
+       l.grade_level
+FROM lessons l
+LEFT JOIN quizzes q
+    ON l.lesson_id = q.lesson_id
+
+WHERE q.quiz_type = 'quiz_purpose'
+ORDER BY l.grade_level, l.lesson_order;
+
+    `);
+
+    return rows;
+},
+
     async findByGrade(gradelevel){
 
         const [rows] = await pool.query(`SELECT lesson_id, lesson_order, title, description, grade_level, 
@@ -48,7 +66,7 @@ module.exports = {
             SET title = ?,
                 description = ?,
                 discussion_content = ?,
-                grade_level = ?,
+                grade_level = ?
             WHERE lesson_id = ?`,
             [
             title,

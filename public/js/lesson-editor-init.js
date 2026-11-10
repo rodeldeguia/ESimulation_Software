@@ -50,12 +50,12 @@ function initLessonEditor(selector) {
     return;
   }
 
-  tinymce.init({
+   tinymce.init({
     selector: selector,
     height: 650,
-    base_url: '/tinymce', // ⬅️ Tells TinyMCE where to find its plugins/themes locally
-    suffix: '.min',       // ⬅️ Uses the minified versions for speed
-    license_key: 'gpl',  //to force the free community version ⬇️
+    base_url: '/tinymce',
+    suffix: '.min',
+    license_key: 'gpl',
     menubar: 'file edit view insert format tools table help',
     plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table help wordcount',
     toolbar: 'undo redo | blocks | bold italic underline | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | insertquiz | removeformat | code | help',
@@ -64,12 +64,16 @@ function initLessonEditor(selector) {
     content_style: LESSON_CONTENT_STYLE,
     forced_root_block: 'p',
     
+    // ⬇️ THIS IS THE FIX ⬇️
+    // Tell TinyMCE to keep div tags with our specific data attributes
+        // Tell TinyMCE to keep divs with ANY data attribute
+    extended_valid_elements: 'div[class|style|data-*],p[style|class],span[class|style]',
+    
     setup: function (editor) {
       editor.on('init', function () {
         window.editorInstance = editor;
       });
 
-      // Add the Insert Quiz button to the toolbar
       editor.ui.registry.addButton('insertquiz', {
         text: '📝 Insert Quiz',
         tooltip: 'Add an interactive quiz to this lesson',

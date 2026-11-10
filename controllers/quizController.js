@@ -5,9 +5,9 @@ const Session = require('../models/sessionModel');
 const Answer = require('../models/answerModel');
 const Progress = require('../models/progressModel');
 const IrregularVerbQuiz = require('../models/irregularVerbQuizModel');
-const ClauseQuiz = require('../models/clauseQiuzModel');
+const ClauseQuiz = require('../models/clauseQuizModel');
 const SvaQuiz = require('../models/svaQuizModel');
-const PhrasalVerbQuiz = require('../models/phrasalVerbModel');
+const PhrasalVerbQuiz = require('../models/phrasalVerbQuizModel');
 const SentencePatternQuiz = require('../models/sentencePatternQuizModel');
 const NlpService = require('../utils/nlpService');
 const QuestionFactory = require('../models/questionFactory');
@@ -18,6 +18,12 @@ exports.getForStudent = async (req,res) => {
         
          let safeQuestions = [];
         let questions = [];
+        questions = questions.sort(() => 0.5 - Math.random());
+
+        const limit = Quiz.questions_per_quiz || questions.length;
+        questions = questions.slice(0, limit);
+
+      
         const quiz = await Quiz.findById(req.params.id);
         if(!quiz) return res.status(404).json({error : `Quiz not Available`});
         if(!quiz.is_published) return res.status (403).json({error : ' Quiz is not available'});
@@ -211,18 +217,46 @@ exports.submit = async (req,res) => {
                 isCorrect = Number(answer.selected_index) === q.correct_option_index;
                 studentAnswerJSON = { selected_index: Number(answer.selected_index) };
                 
-            } else if (quiz.quiz_type === 'irregular_verb') {
-                // Normalize: lowercase, trim
-                const studentText = String(answer.text || '').trim().toLowerCase();
-                const correctText = String(q.correct_answer).trim().toLowerCase();
+        } else if (quiz.quiz_type === 'irregular_verb') {
+      const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
+      const studentData = answer.data || {};
+      
+      let allCorrect = true;
+      const correctAnswersMap = {
+        present: q.present_form,
+        past: q.past_form,
+        future: q.future_form,
+        past_participle: q.past_participle
+      };
 
-                // Check alternative_answers too
-                const alternatives = Array.isArray(q.alternative_answers)
-                ? q.alternative_answers.map(a => String(a).trim().toLowerCase())
-                : [];
+      // If teacher provided alternatives (like "learnt" for "learned"), parse it
+      const alternatives = typeof q.alternative_answers === 'string' 
+        ? JSON.parse(q.alternative_answers || '{}') 
+        : (q.alternative_answers || {});
 
-                isCorrect = studentText === correctText || alternatives.includes(studentText);
-                studentAnswerJSON = { text: answer.text || '' };
+      for (const field of blanks) {
+        const studentAnswer = String(studentData[field] || '').trim().toLowerCase();
+        const correctAnswer = String(correctAnswersMap[field] || '').trim().toLowerCase();
+        
+        let isThisBlankCorrect = (studentAnswer === correctAnswer);
+
+        // Check if the student typed an alternative answer
+        if (!isThisBlankCorrect && alternatives[field]) {
+          isThisBlankCorrect = alternatives[field].some(alt => 
+            String(alt).trim().toLowerCase() === studentAnswer
+          );
+        }
+
+        if (!isThisBlankCorrect) {
+          allCorrect = false;
+        }
+      }
+
+      isCorrect = allCorrect;
+      studentAnswerJSON = { data: studentData };
+         
+
+    
 
             } else if (quiz.quiz_type === 'clause') {
                 // isCorrect = Number(answer.selected_index) === q.correct_option_index;
@@ -257,32 +291,50 @@ exports.submit = async (req,res) => {
 
                 studentAnswerJSON = { text: answer.text || '', reason: svaReason };
 
-                }else if (quiz.quiz_type === 'phrasal_verb') {
-            const result = validatePhrasalVerbAnswer(answer.text, q);
-            isCorrect = result.isCorrect;
-            studentAnswerJSON = { text: answer.text || '', reason: result.reason || null };
-            svaReason = result.reason || null;   // reuse the reason variable
+                   } else if (quiz.quiz_type === 'phrasal_verb') {
+      const sentence = String(answer.text || '').toLowerCase().replace(/[.,!?;:]/g, '');
+      const studentVerb = String(answer.phrasal_verb_answer || '').trim().toLowerCase();
+
+      if (!sentence || !studentVerb) {
+        isCorrect = false;
+        studentAnswerJSON = { text: sentence, phrasal_verb_answer: studentVerb, reason: 'Missing sentence or verb' };
+      } else {
+        // Check if the student's typed verb appears in their sentence
+        const verbInSentence = sentence.includes(studentVerb);
+        
+        // Optional: Use winkNLP to verify it's actually a verb+particle combo
+        const doc = nlp.readDoc(sentence);
+        let hasVerb = false;
+        doc.tokens().each(t => { if (t.out(its.pos) === 'VERB') hasVerb = true; });
+
+        if (!hasVerb) {
+          isCorrect = false;
+          studentAnswerJSON = { text: sentence, phrasal_verb_answer: studentVerb, reason: 'Your sentence does not contain a verb.' };
+        } else if (!verbInSentence) {
+          isCorrect = false;
+          studentAnswerJSON = { text: sentence, phrasal_verb_answer: studentVerb, reason: `The phrasal verb "${studentVerb}" was not found in your sentence.` };
+        } else {
+          isCorrect = true;
+          studentAnswerJSON = { text: sentence, phrasal_verb_answer: studentVerb, reason: 'Correct!' };
+        }
+      }
+    
 
             } else if (quiz.quiz_type === 'sentence_pattern') {
-                // NLP checks pattern match + grammar
-                const nlpResult = NlpService.validateSentencePatternWithNlp(
-                    answer.text, answer.selected_pattern, q
-                );
-                // Rules check word count
-                const ruleResult = validateSentencePatternAnswer(answer.text, answer.selected_pattern, q);
+      // The student sends: answer.text (their sentence) and answer.selected_pattern
+      // We use winkNLP to verify if the sentence actually matches the selected pattern.
+      const nlpResult = NlpService.validateSentencePatternWithNlp(
+        answer.text, answer.selected_pattern
+      );
 
-                isCorrect = nlpResult.isCorrect && ruleResult.isCorrect;
-
-                svaReason = !nlpResult.isCorrect ? nlpResult.reason
-                            : !ruleResult.isCorrect ? ruleResult.reason
-                            : null;
-
-                studentAnswerJSON = {
-                    text: answer.text || '',
-                    selected_pattern: answer.selected_pattern || '',
-                    reason: svaReason
-                };
-                }
+      isCorrect = nlpResult.isCorrect;
+      
+      studentAnswerJSON = {
+        text: answer.text || '',
+        selected_pattern: answer.selected_pattern || '',
+        reason: nlpResult.reason || null
+      };
+    }
 
 
             if (isCorrect) correctCount ++;
@@ -358,7 +410,7 @@ exports.submit = async (req,res) => {
                     selected_pattern: answer.selected_pattern || '',
                     correct_pattern: q.target_pattern,
                     pattern_correct: String(answer.selected_pattern || '').trim().toUpperCase() === String(q.target_pattern || '').trim().toUpperCase(),
-                    reason: svaReason
+                    reason: studentAnswerJSON.reason
                     } : {}),
             });
         }
@@ -529,45 +581,54 @@ exports.submit = async (req,res) => {
 // ═══════════════════════════════════════════════════════
 exports.createQuiz = async (req, res) => {
   try {
-    // Role check
     if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only teachers can create quizzes' });
+      return res.status(403).json({ error: 'Teacher access only' });
     }
 
-    const { lesson_id, quiz_type, quiz_purpose, title, description, passing_score, time_limit, questions_per_quiz } = req.body;
+    const { 
+      lesson_id, quiz_type, quiz_purpose, title, description,
+      passing_score, time_limit, max_quiz_attempts, questions_per_quiz 
+    } = req.body;
 
     if (!lesson_id || !quiz_type || !title) {
       return res.status(400).json({ error: 'lesson_id, quiz_type, and title are required' });
     }
 
-    const validTypes = ['preposition', 'irregular_verb', 'clause', 'sva', 'phrasal_verb', 'sentence_pattern'];
-    if (!validTypes.includes(quiz_type)) {
-      return res.status(400).json({ error: `quiz_type must be one of: ${validTypes.join(', ')}` });
+    // 1. Check if a quiz already exists for this lesson
+    if (quiz_purpose === 'final') {
+      const [existing] = await pool.query(
+        `SELECT quiz_id FROM quizzes WHERE lesson_id = ? AND quiz_purpose = 'final'`,
+        [lesson_id]
+      );
+
+      if (existing.length > 0) {
+        // If it exists, return the existing quiz ID so the frontend edits it instead of creating a new one
+        return res.status(200).json({ 
+          message: 'A final quiz already exists for this lesson.',
+          quiz: { quiz_id: existing[0].quiz_id } 
+        });
+      }
     }
 
-    const quiz = await Quiz.createquiz({
-      lesson_id,
-      teacher_id: req.user.id,
-      quiz_type,
-      quiz_purpose: quiz_purpose || 'review',
-      title,
-      description,
-      passing_score: passing_score ?? 70.00,
-      time_limit: time_limit || null,
-      questions_per_quiz: questions_per_quiz ?? 10,
-      is_published: 0   // Always draft by default
-    });
+    // 2. Create the new quiz
+    const [result] = await pool.query(
+      `INSERT INTO quizzes 
+       (lesson_id, teacher_id, quiz_type, quiz_purpose, title, description, passing_score, time_limit, max_quiz_attempts, questions_per_quiz, is_published) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [
+        lesson_id, req.user.id, quiz_type, quiz_purpose || 'final', 
+        title, description || null, // ⬅️ Fixed: Description is now saved
+        passing_score || 70.00, time_limit || null,
+        max_quiz_attempts || 3, questions_per_quiz || 10
+      ]
+    );
 
-    res.status(201).json({
-      message: 'Quiz created as draft. Add questions then publish.',
-      quiz
-    });
+    res.status(201).json({ quiz: { quiz_id: result.insertId } });
   } catch (err) {
     console.error('createQuiz error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };
-
 // ═══════════════════════════════════════════════════════
 // TEACHER: Add a question to a quiz
 // ═══════════════════════════════════════════════════════
@@ -595,7 +656,7 @@ exports.addQuestion = async (req, res) => {
     // Add created_by automatically
     const questionData = { ...req.body, quiz_id: quiz.quiz_id, created_by: req.user.id };
 
-    const question = await Model.createPrepositionQuestion(questionData);
+    const question = await Model.create(questionData);
 
     res.status(201).json({
       message: 'Question added',
@@ -696,44 +757,58 @@ exports.listTeacherQuizzes = async (req, res) => {
 // ═══════════════════════════════════════════════════════
 // TEACHER: Create an embedded quiz from the lesson editor
 // ═══════════════════════════════════════════════════════
+// 1. Save a new inline quiz
 exports.createEmbeddedQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Teacher access only' });
     }
 
-    const { lesson_id, quiz_type, question_text, options, correct_option_index, correct_answer, explanation, sentence, clause_text, clause_type } = req.body;
+    const { lesson_id, question_text, options, correct_option_index } = req.body;
 
-    if (!lesson_id || !quiz_type) {
-      return res.status(400).json({ error: 'Missing lesson_id or quiz_type' });
+    if (!lesson_id || !question_text || !options || correct_option_index === undefined) {
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // 1. Create a "container" quiz in the quizzes table
-    const [quizResult] = await pool.query(
-      `INSERT INTO quizzes (lesson_id, teacher_id, quiz_type, quiz_purpose, title, passing_score, is_published) 
-       VALUES (?, ?, ?, 'review', 'Embedded Quiz', 70.00, 1)`,
-      [lesson_id, req.user.id, quiz_type]
+    const [result] = await pool.query(
+      `INSERT INTO embedded_quizzes (lesson_id, question_text, options, correct_option_index, created_by) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [lesson_id, question_text, JSON.stringify(options), correct_option_index, req.user.id]
     );
-    const quiz_id = quizResult.insertId;
 
-    // 2. Insert the question based on type
-    if (quiz_type === 'preposition') {
-      await pool.query(
-        `INSERT INTO preposition_quiz (quiz_id, question_text, options, correct_option_index, correct_answer, explanation, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [quiz_id, question_text, JSON.stringify(options), correct_option_index, correct_answer, explanation, req.user.id]
-      );
-    } else if (quiz_type === 'clause') {
-      await pool.query(
-        `INSERT INTO clause_quiz (quiz_id, question_text, sentence, options, correct_option_index, clause_text, clause_type, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [quiz_id, question_text, sentence, JSON.stringify(options), correct_option_index, clause_text, clause_type, req.user.id]
-      );
-    }
-
-    res.status(201).json({ quiz_id });
+    res.status(201).json({ quiz_id: result.insertId });
   } catch (err) {
     console.error('createEmbeddedQuiz error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// 2. Check the student's answer
+exports.checkInlineAnswer = async (req, res) => {
+  try {
+    const { quiz_id, selected_index } = req.body;
+    
+    const [rows] = await pool.query('SELECT correct_option_index FROM embedded_quizzes WHERE embed_quiz_id = ?', [quiz_id]);
+    
+    if (rows.length === 0) return res.status(404).json({ error: 'Quiz not found' });
+    
+    const isCorrect = Number(selected_index) === rows[0].correct_option_index;
+    res.json({ isCorrect });
+  } catch (err) {
+    console.error('checkInlineAnswer error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.updateQuizSettings = async (req, res) => {
+  try {
+    const { title, passing_score, time_limit, max_quiz_attempts, questions_per_quiz } = req.body;
+    await pool.query(
+      `UPDATE quizzes SET title=?, passing_score=?, time_limit=?, max_quiz_attempts=?, questions_per_quiz=? WHERE quiz_id=?`,
+      [title, passing_score, time_limit || null, max_quiz_attempts || 3, questions_per_quiz || 10, req.params.id]
+    );
+    res.json({ message: 'Settings updated' });
+  } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
 };

@@ -61,6 +61,13 @@ function renderQuizInfo() {
   document.getElementById('quizMeta').textContent =
     `${formatQuizType(quiz.quiz_type)} • Passing: ${quiz.passing_score}% • ${questions.length} question${questions.length !== 1 ? 's' : ''}`;
 
+
+   document.getElementById('setTitle').value = quiz.title;
+  document.getElementById('setPassing').value = quiz.passing_score;
+  document.getElementById('setTime').value = quiz.time_limit || '';
+  document.getElementById('setAttempts').value = quiz.max_quiz_attempts || 3;
+  document.getElementById('setItemsToShow').value = quiz.questions_per_quiz || 10;
+
   const banner = document.getElementById('statusBanner');
   if (quiz.is_published) {
     banner.className = 'status-banner published';
@@ -193,13 +200,14 @@ function renderQuestionForm() {
         <textarea id="q_explanation" placeholder="Explain why this is correct..."></textarea>
       </div>
     `;
-  } else if (quiz.quiz_type === 'irregular_verb') {
+      } else if (quiz.quiz_type === 'irregular_verb') {
     container.innerHTML = `
       <div class="form-group">
-        <label>Question Text</label>
-        <input type="text" id="q_text" required placeholder="e.g., Write the past tense of the verb &quot;go&quot;.">
+        <label>Question Text (e.g. Fill in the missing forms of "go")</label>
+        <input type="text" id="q_text" required>
       </div>
       ${common}
+      
       <div class="row">
         <div class="form-group">
           <label>Present Form</label>
@@ -220,28 +228,24 @@ function renderQuestionForm() {
           <input type="text" id="q_participle" required placeholder="gone">
         </div>
       </div>
-      <div class="form-group">
-        <label>Asking For</label>
-        <select id="q_ask_for" required>
-          <option value="present">Present</option>
-          <option value="past">Past</option>
-          <option value="future">Future</option>
-          <option value="past_participle">Past Participle</option>
-        </select>
+
+      <div class="form-group" style="background:#f0fdf4; padding:16px; border-radius:8px; border:1px solid #bbf7d0;">
+        <label style="color:#166534; margin-bottom:12px;">Which fields should the student fill in? (Check all that apply)</label>
+        <div style="display:flex; gap:16px;">
+          <label><input type="checkbox" id="blank_present" value="present"> Present</label>
+          <label><input type="checkbox" id="blank_past" value="past"> Past</label>
+          <label><input type="checkbox" id="blank_future" value="future"> Future</label>
+          <label><input type="checkbox" id="blank_participle" value="past_participle"> Past Participle</label>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Correct Answer</label>
-        <input type="text" id="q_correct" required placeholder="went">
-      </div>
-      <div class="form-group">
-        <label>Alternative Answers (comma-separated, optional)</label>
-        <input type="text" id="q_alternatives" placeholder="e.g., learnt, learned">
-      </div>
+
       <div class="form-group">
         <label>Example Sentence (optional)</label>
         <input type="text" id="q_example" placeholder="Yesterday I went to the store.">
       </div>
     `;
+  
+    
   } else if (quiz.quiz_type === 'clause') {
     container.innerHTML = `
       <div class="form-group">
@@ -348,29 +352,32 @@ function renderQuestionForm() {
         <input type="text" id="q_example" required placeholder="She gave up smoking last year.">
       </div>
     `;
-  } else if (quiz.quiz_type === 'sentence_pattern') {
+    } else if (quiz.quiz_type === 'sentence_pattern') {
     container.innerHTML = `
       <div class="form-group">
         <label>Instruction</label>
-        <input type="text" id="q_instruction" required placeholder="Write a sentence using the Subject-Verb-Object pattern.">
+        <input type="text" id="q_instruction" required value="Write a sentence using the selected pattern.">
       </div>
       ${common}
+      
       <div class="form-group">
-        <label>Target Pattern</label>
-        <input type="text" id="q_target_pattern" required placeholder="S-V-O">
+        <label>Target Pattern (The correct answer)</label>
+        <select id="q_target_pattern" required>
+          <option value="S-V-O">S-V-O (Subject - Verb - Object)</option>
+          <option value="S-IV">S-IV (Subject - Intransitive Verb)</option>
+          <option value="S-LV-C">S-LV-C (Subject - Linking Verb - Complement)</option>
+          <option value="S-TV-O">S-TV-O (Subject - Transitive Verb - Object)</option>
+        </select>
       </div>
-      <div class="form-group">
-        <label>Allowed Patterns (comma-separated)</label>
-        <input type="text" id="q_allowed" required placeholder="S-V-O, S-IV, S-LV-C, S-TV-O">
-      </div>
+
       <div class="row">
         <div class="form-group">
           <label>Min Words</label>
-          <input type="number" id="q_min" value="3" min="1" required>
+          <input type="number" id="q_min" value="3" required>
         </div>
         <div class="form-group">
           <label>Max Words</label>
-          <input type="number" id="q_max" value="15" min="1" required>
+          <input type="number" id="q_max" value="15" required>
         </div>
       </div>
     `;
@@ -437,6 +444,16 @@ function buildQuestionPayload() {
   }
 
   if (quiz.quiz_type === 'irregular_verb') {
+    const blankFields = [];
+    if (document.getElementById('blank_present').checked) blankFields.push('present');
+    if (document.getElementById('blank_past').checked) blankFields.push('past');
+    if (document.getElementById('blank_future').checked) blankFields.push('future');
+    if (document.getElementById('blank_participle').checked) blankFields.push('past_participle');
+
+    if (blankFields.length === 0) {
+      throw new Error('Please select at least one blank field for the student to fill.');
+    }
+
     return {
       ...base,
       question_text: document.getElementById('q_text').value.trim(),
@@ -444,10 +461,7 @@ function buildQuestionPayload() {
       past_form: document.getElementById('q_past').value.trim(),
       future_form: document.getElementById('q_future').value.trim(),
       past_participle: document.getElementById('q_participle').value.trim(),
-      ask_for: document.getElementById('q_ask_for').value,
-      correct_answer: document.getElementById('q_correct').value.trim(),
-      alternative_answers: document.getElementById('q_alternatives').value
-        .split(',').map(s => s.trim()).filter(Boolean),
+      blank_fields: blankFields,
       example_sentence: document.getElementById('q_example').value.trim() || null
     };
   }
@@ -496,13 +510,12 @@ function buildQuestionPayload() {
     };
   }
 
-  if (quiz.quiz_type === 'sentence_pattern') {
+   if (quiz.quiz_type === 'sentence_pattern') {
     return {
       ...base,
       instruction: document.getElementById('q_instruction').value.trim(),
-      target_pattern: document.getElementById('q_target_pattern').value.trim(),
-      allowed_patterns: document.getElementById('q_allowed').value
-        .split(',').map(s => s.trim()).filter(Boolean),
+      target_pattern: document.getElementById('q_target_pattern').value,
+      allowed_patterns: ['S-V-O', 'S-IV', 'S-LV-C', 'S-TV-O'], // Always show all 4 to student
       min_sentence_length: parseInt(document.getElementById('q_min').value),
       max_sentence_length: parseInt(document.getElementById('q_max').value),
       nlp_rules: {}
@@ -537,6 +550,8 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
     alert('Error publishing quiz');
   }
 });
+
+
 
 // ─── START ───
 loadQuiz();

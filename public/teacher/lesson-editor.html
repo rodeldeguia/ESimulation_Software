@@ -104,6 +104,9 @@
       <div class="quick-insert-panel">
         <h4>🎨 Insert W3Schools-Style Colored Boxes</h4>
         <div class="quick-buttons">
+          <!-- <button type="button" class="quick-btn" style="background:#8b5cf6; color:white; margin-left:auto;" onclick="openPreTestModal()">
+  🎯 Add Pre-Test
+</button> -->
           <button type="button" class="quick-btn btn-blue-box" onclick="insertColoredBox('blue')">🔵 Blue Info Box</button>
           <button type="button" class="quick-btn btn-green-box" onclick="insertColoredBox('green')">🟢 Green Tip Box</button>
           <button type="button" class="quick-btn btn-yellow-box" onclick="insertColoredBox('yellow')">🟡 Warning Box</button>
@@ -117,10 +120,27 @@
         <textarea id="discussion_content" ></textarea>
       </div>
 
-      <div class="form-actions">
-        <button type="button" class="btn-preview" onclick="previewLesson()">👁️ Preview</button>
-        <button type="submit" class="btn-save" id="saveBtn">💾 Save Topic</button>
+      <!-- PRE-TEST BUILDER -->
+      
+            <div class="form-actions" style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button type="button" onclick="openPreTestModal()" style="background:#8b5cf6; color:white; padding:10px 20px; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">
+            🎯 Add / Edit Pre-Test
+          </button>
+          <span id="preTestBadge" style="display:none; background:#dcfce7; color:#166534; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold;">
+            ✅ Pre-Test exists
+          </span>
+          <span id="finalQuizBadge" style="display:none; background:#fce7f3; color:#9d174d; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold;">
+            ✅ Final Quiz exists
+          </span>
+        </div>
+        
+        <div style="display:flex; gap:10px;">
+          <button type="button" class="btn-preview" onclick="previewLesson()">👁️ Preview</button>
+          <button type="submit" class="btn-save" id="saveBtn">💾 Save Topic</button>
+        </div>
       </div>
+
     </form>
   </div>
     <!-- INSERT QUIZ MODAL -->
@@ -131,7 +151,7 @@
       <div class="form-group">
         <label>Quiz Type</label>
         <select id="modalQuizType" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
-          <option value="preposition">Preposition (Multiple Choice)</option>
+          <option value="preposition">(Multiple Choice)</option>
           <option value="clause">Clause (Two-Step)</option>
           <!-- Add other types here later if needed -->
         </select>
@@ -152,6 +172,84 @@
     </div>
   </div>
 
+  <!-- PRE-TEST MODAL -->
+  <!-- PRE-TEST MODAL -->
+  <!-- <div id="preTestModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:white; width:700px; max-width:90%; border-radius:8px; padding:30px; max-height:90vh; overflow-y:auto;">
+       -->
+      <!-- Header -->
+      <!-- <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2 style="color:#8b5cf6; margin:0;">🎯 Pre-Test Builder</h2>
+        <button type="button" onclick="closePreTestModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
+      </div>
+      
+      <p style="color:#64748b; font-size:14px; margin-bottom:20px;">Students must pass this test before they can read the lesson.</p> -->
+
+      <!-- List of questions -->
+      <!-- <div id="modalPreTestList" style="margin-bottom: 20px; max-height: 200px; overflow-y: auto;"> -->
+        <!-- JS inserts questions here -->
+      <!-- </div> -->
+
+      <!-- Add question form -->
+            <!-- <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;"> -->
+        <!-- <h4 style="margin-top:0; font-size:15px;">Add New Question</h4> -->
+        
+        <!-- <div class="form-group">
+          <label>Quiz Type</label>
+          <select id="fqType" onchange="renderFinalQuizFields()" style="width:100%; margin-bottom:10px; padding:10px; border:1px solid #cbd5e1; border-radius:4px;">
+            <option value="preposition">Preposition (Multiple Choice)</option>
+            <option value="clause">Clause (Two-step)</option>
+            <option value="irregular_verb">Irregular Verb</option>
+            <option value="sva">Subject-Verb Agreement (NLP)</option>
+          </select>
+        </div> -->
+
+        <!-- Dynamic fields will load here -->
+        <!-- <div id="fqDynamicFields"></div>
+
+        <button type="button" onclick="addFinalQuizQuestion()" style="background:#fce7f3; color:#9d174d; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">+ Add Question to List</button>
+      </div> -->
+      <!-- Footer buttons -->
+      <!-- <div style="margin-top:24px; text-align:right;">
+        <button type="button" onclick="closePreTestModal()" style="padding:10px 20px; border:none; border-radius:4px; background:#e2e8f0; cursor:pointer; margin-right:8px;">Cancel</button>
+        <button type="button" onclick="previewPreTest()" style="padding:10px 20px; border:none; border-radius:4px; background:#2196F3; color:white; cursor:pointer; margin-right:8px;">👁️ Preview</button>
+        <button type="button" onclick="closePreTestModal()" style="padding:10px 20px; border:none; border-radius:4px; background:#8b5cf6; color:white; cursor:pointer; font-weight:bold;">Done</button>
+      </div>
+    </div>
+  </div> -->
+
+  <!-- pre test modal end -->
+
+<!-- PRE-TEST MODAL --> 
+ <div id="preTestModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+  <div style="background:white; width:700px; max-width:90%; border-radius:8px; padding:30px; max-height:90vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2 style="color:#8b5cf6; margin:0;">🎯 Pre-Test Builder</h2>
+      <button type="button" onclick="closePreTestModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
+    </div>
+    
+    <p style="color:#64748b; font-size:14px; margin-bottom:20px;">Students must pass this test before they can read the lesson.</p>
+
+    <div id="modalPreTestList" style="margin-bottom: 20px; max-height: 200px; overflow-y: auto;"></div>
+
+    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+      <h4 style="margin-top:0; font-size:15px;">Add New Question</h4>
+      <input type="text" id="ptQuestion" placeholder="Question text (e.g. What is a verb?)" style="width:100%; margin-bottom:10px; padding:10px; border:1px solid #cbd5e1; border-radius:4px;">
+      <input type="text" id="ptOptions" placeholder="Options separated by comma (e.g. A, B, C, D)" style="width:100%; margin-bottom:10px; padding:10px; border:1px solid #cbd5e1; border-radius:4px;">
+      <input type="text" id="ptCorrect" placeholder="Correct answer (must match one option)" style="width:100%; margin-bottom:15px; padding:10px; border:1px solid #cbd5e1; border-radius:4px;">
+      <button type="button" onclick="addPreTestQuestion()" style="background:#e0e7ff; color:#3730a3; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">+ Add Question to List</button>
+    </div>
+
+        <div style="margin-top:24px; text-align:right;">
+      <button type="button" onclick="closePreTestModal()" style="padding:10px 20px; border:none; border-radius:4px; background:#e2e8f0; cursor:pointer; margin-right:8px;">Cancel</button>
+      <button type="button" onclick="previewPreTest()" style="padding:10px 20px; border:none; border-radius:4px; background:#2196F3; color:white; cursor:pointer; margin-right:8px;">👁️ Preview</button>
+      <button type="button" onclick="closePreTestModal()" style="padding:10px 20px; border:none; border-radius:4px; background:#8b5cf6; color:white; cursor:pointer; font-weight:bold;">Done</button>
+    </div>
+  </div>
+
+    <!-- FINAL QUIZ MODAL -->
+  
+</div>
   <!-- Load TinyMCE FIRST -->
   <script src="/tinymce/tinymce.min.js"></script>
   <script src="/js/lesson-editor-init.js"></script>

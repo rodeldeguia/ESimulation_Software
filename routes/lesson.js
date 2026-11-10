@@ -6,6 +6,7 @@ const authMiddleware = require('../middleware/middlewareAuth');
 router.use(authMiddleware);
 
 router.get('/', lessonController.list);
+router.get('/withoutquiz', lessonController.listWithoutQuiz);
 router.get('/:id', lessonController.getOne);
 router.put('/:id', lessonController.update);
 router.get('/:id/quizzes', lessonController.getQuizzes);
