@@ -12,6 +12,7 @@ const params = new URLSearchParams(window.location.search);
 const lessonId = params.get('id'); // If present, we are editing
 const isEdit = !!lessonId;
 let preTestQuestions = [];
+let finalQuizQuestions = [];
 
 // 1. Initialize the editor
 initLessonEditor('#discussion_content');
@@ -38,6 +39,12 @@ async function loadLessonData() {
     if (lesson.pre_tests && lesson.pre_tests.length > 0) {
       preTestQuestions = lesson.pre_tests;
       document.getElementById('preTestBadge').style.display = 'inline-block'; // Show the badge!
+    }
+
+        // ⬇️ Load Final Quiz Questions ⬇️
+    if (lesson.final_quizzes && lesson.final_quizzes.length > 0) {
+      finalQuizQuestions = lesson.final_quizzes;
+      document.getElementById('finalQuizBadge').style.display = 'inline-block';
     }
     document.getElementById('pageTitle').textContent = 'Edit Grammar Topic';
     document.getElementById('pageSubtitle').textContent = `Editing: ${lesson.title}`;
@@ -102,7 +109,8 @@ document.getElementById('lessonForm').addEventListener('submit', async (e) => {
     grade_level: document.getElementById('grade_level').value,
     description: document.getElementById('description').value.trim() || null,
     discussion_content: content,
-    pre_tests: preTestQuestions // ⬅️ Send pre-test data
+    pre_tests: preTestQuestions ,// ⬅️ Send pre-test data
+    final_quizzes: finalQuizQuestions
   };
 
   if (!payload.title) {
@@ -449,3 +457,7 @@ function escapeHtml(str) {
   div.textContent = str || '';
   return div.innerHTML;
 }
+
+// ═══════════════════════════════════════════════════════
+// FINAL QUIZ MODAL LOGIC
+// ═══════════════════════════════════════════════════════

@@ -31,6 +31,16 @@ exports.list = async (req,res) =>{
     }
 };
 
+exports.listWithoutQuiz = async (req, res) => {
+    try {
+        const lessons = await Lesson.findlLessonWithoutQuiz();
+        res.json(lessons);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
 exports.getOne = async (req,res) => {
     try {
         const lesson = await Lesson.findById(req.params.id);
@@ -64,6 +74,23 @@ exports.getOne = async (req,res) => {
             }));
         } else {
             lesson.pre_tests = [];
+        }
+
+                // 3. Fetch Final Quiz questions
+        const [finalQuiz] = await pool.query("SELECT quiz_id FROM quizzes WHERE lesson_id = ? AND quiz_purpose = 'final'", [lesson.lesson_id]);
+        if (finalQuiz.length > 0) {
+            const [questions] = await pool.query(
+                "SELECT question_text, options, correct_option_index, correct_answer FROM preposition_quiz WHERE quiz_id = ?", 
+                [finalQuiz[0].quiz_id]
+            );
+            lesson.final_quizzes = questions.map(q => ({
+                question_text: q.question_text,
+                options: q.options,
+                correct_option_index: q.correct_option_index,
+                correct_answer: q.correct_answer
+            }));
+        } else {
+            lesson.final_quizzes = [];
         }
 
         res.json(lesson);
@@ -155,6 +182,23 @@ exports.create = async(req,res) => {
             }
         }
 
+                // 4. Handle Final Quiz
+               if (req.body.final_quizzes && req.body.final_quizzes.length > 0) {
+            // Get the type from the first question
+            const fqType = req.body.final_quizzes[0].type;
+            
+            const [quizResult] = await pool.query(
+                `INSERT INTO quizzes (lesson_id, teacher_id, quiz_type, quiz_purpose, title, passing_score, is_published) 
+                 VALUES (?, ?, ?, 'final', 'Lesson Final Quiz', 70.00, 1)`,
+                [lesson.lesson_id, req.user.id, fqType]
+            );
+            const final_quiz_id = quizResult.insertId;
+            
+            for (const q of req.body.final_quizzes) {
+                await saveDynamicQuestion(pool, final_quiz_id, q.type, q, req.user.id);
+            }
+        }
+
         res.status(201).json({ message : 'Lesson created as draft.', lesson: lesson });
     } catch (error) {
         console.error('Lesson create Error:',error);
@@ -220,9 +264,66 @@ exports.update = async (req, res) => {
             }
         }
 
+                // Handle Final Quizzes
+               if (req.body.final_quizzes) {
+            const [existingFinal] = await pool.query("SELECT quiz_id, quiz_type FROM quizzes WHERE lesson_id = ? AND quiz_purpose = 'final'", [req.params.id]);
+            
+            if (existingFinal.length > 0) {
+                const fqId = existingFinal[0].quiz_id;
+                const oldType = existingFinal[0].quiz_type;
+                
+                // Delete old questions
+                await pool.query(`DELETE FROM ${oldType}_quiz WHERE quiz_id = ?`, [fqId]);
+                
+                if (req.body.final_quizzes.length > 0) {
+                    // Update the quiz container type
+                    const newType = req.body.final_quizzes[0].type;
+                    await pool.query(`UPDATE quizzes SET quiz_type = ? WHERE quiz_id = ?`, [newType, fqId]);
+                    
+                    for (const q of req.body.final_quizzes) {
+                        await saveDynamicQuestion(pool, fqId, q.type, q, req.user.id);
+                    }
+                } else {
+                    await pool.query('DELETE FROM quizzes WHERE quiz_id = ?', [fqId]);
+                }
+            } else if (req.body.final_quizzes.length > 0) {
+                const fqType = req.body.final_quizzes[0].type;
+                const [quizResult] = await pool.query(
+                    `INSERT INTO quizzes (lesson_id, teacher_id, quiz_type, quiz_purpose, title, passing_score, is_published) 
+                     VALUES (?, ?, ?, 'final', 'Lesson Final Quiz', 70.00, 1)`,
+                    [req.params.id, req.user.id, fqType]
+                );
+                for (const q of req.body.final_quizzes) {
+                    await saveDynamicQuestion(pool, quizResult.insertId, q.type, q, req.user.id);
+                }
+            }
+        }
+
         res.json({ message: 'Lesson updated successfully', discussion_content: finalContent });
     } catch (err) {
         console.error('lesson update error:', err);
         res.status(500).json({ error: 'Server error' });
     }
+
+    async function saveDynamicQuestion(pool, quizId, type, q, teacherId) {
+  if (type === 'preposition' || type === 'clause') {
+    await pool.query(
+      `INSERT INTO ${type}_quiz (quiz_id, question_text, options, correct_option_index, correct_answer, created_by) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [quizId, q.question_text, JSON.stringify(q.options), q.correct_option_index, q.correct_answer, teacherId]
+    );
+  } else if (type === 'irregular_verb') {
+    await pool.query(
+      `INSERT INTO irregular_verb_quiz (quiz_id, question_text, present_form, past_form, future_form, past_participle, ask_for, correct_answer, created_by) 
+       VALUES (?, ?, ?, ?, 'will', 'done', ?, ?, ?)`,
+      [quizId, q.question_text, q.present_form, q.past_form, q.ask_for, q.correct_answer, teacherId]
+    );
+  } else if (type === 'sva') {
+    await pool.query(
+      `INSERT INTO sva_quiz (quiz_id, instruction, subject_type, verb_type, example_sentence, nlp_rules, created_by) 
+       VALUES (?, ?, ?, 'singular', ?, '{}', ?)`,
+      [quizId, q.instruction, q.subject_type, q.example_sentence, teacherId]
+    );
+  }
+}
 };

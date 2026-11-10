@@ -1,9 +1,9 @@
 // models/questionFactory.js
 const PrepositionQuiz       = require('./prepositionQuizModel');
 const IrregularVerbQuiz     = require('./irregularVerbQuizModel');
-const ClauseQuiz            = require('./clauseQiuzModel');
+const ClauseQuiz            = require('./clauseQuizModel');
 const SvaQuiz               = require('./svaQuizModel');
-const PhrasalVerbQuiz       = require('./phrasalVerbModel');
+const PhrasalVerbQuiz       = require('./phrasalVerbQuizModel');
 const SentencePatternQuiz   = require('./sentencePatternQuizModel');
 
 // Map quiz_type → model

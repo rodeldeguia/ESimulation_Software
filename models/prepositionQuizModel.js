@@ -12,7 +12,7 @@ module.exports = {
         return rows[0] || null;
     },
 
-    async createPrepositionQuestion({quiz_id, question_text, instructions, points, hint, correct_answer, options, correct_option_index, explanation, created_by}){
+    async create({quiz_id, question_text, instructions, points, hint, correct_answer, options, correct_option_index, explanation, created_by}){
         const [result] = await pool.query('INSERT INTO preposition_quiz (quiz_id, question_text, instructions, points, hint, correct_answer, options, correct_option_index, explanation, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                                                                         [quiz_id, question_text, instructions, points, hint, correct_answer, JSON.stringify(options), correct_option_index, explanation, created_by]);
         return {

@@ -19,4 +19,6 @@ router.post('/embed', quizController.createEmbeddedQuiz);
 // Add this at the top of your routes
 router.post('/check-inline', quizController.checkInlineAnswer);
 
+router.put('/:id/settings', quizController.updateQuizSettings);
+
 module.exports = router;

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My Quizzes — SSEGL</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { display: block; padding: 0; background: #f1f5f9; }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 240px; background: #0f172a; color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-header { padding: 24px 20px; font-weight: 700; font-size: 18px; border-bottom: 1px solid #1e293b; color: #93c5fd; }
+    .nav-links { padding: 20px 12px; flex-grow: 1; }
+    .nav-links a { display: block; padding: 12px 16px; color: #cbd5e1; text-decoration: none; border-radius: 6px; margin-bottom: 4px; font-size: 14px; }
+    .nav-links a:hover { background: #1e293b; color: white; }
+    .nav-links a.active { background: #1e3a8a; color: white; font-weight: 600; }
+    .logout-btn { color: #f87171 !important; margin-top: auto; padding-bottom: 24px; }
+
+    .main-content { flex-grow: 1; padding: 32px; overflow-y: auto; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .page-header h1 { color: #0f172a; font-size: 28px; }
+    .btn-primary { background: #1e3a8a; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; display: inline-block; border: none; cursor: pointer; }
+
+    .panel { background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow-x: auto; padding: 20px; }
+    .quiz-card { border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
+    .quiz-card h3 { color: #0f172a; margin: 0 0 4px 0; font-size: 16px; }
+    .quiz-card p { color: #64748b; font-size: 13px; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">English Grammar Lessons</div>
+      <div class="nav-links">
+        <a href="/teacher/dashboard.html">Dashboard</a>
+        <a href="/teacher/lessons.html">Lessons</a>
+        <a href="/teacher/quizzes.html" class="active">Quizzes</a>
+        <a href="/teacher/progress.html">Progress</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+    <main class="main-content">
+      <div class="page-header">
+        <h1>My Quizzes</h1>
+        <a href="/teacher/create-quiz.html" class="btn-primary">+ Create Final Quiz</a>
+      </div>
+      <div class="panel" id="quizList">
+        Loading...
+      </div>
+    </main>
+  </div>
+  <script src="/teacher/quizzes.js"></script>
+</body>
+</html>
