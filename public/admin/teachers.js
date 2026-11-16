@@ -3,37 +3,55 @@ const token = localStorage.getItem('token');
 if (!token) window.location.href = '/auth/teacher-login.html';
 
 async function loadTeachers() {
+  const tbody = document.getElementById('teacherList');
+
   try {
     const res = await fetch('/api/admin/teachers', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
+    
     if (res.status === 401) { localStorage.clear(); window.location.href = '/auth/teacher-login.html'; return; }
     if (res.status === 403) { window.location.href = '/teacher/dashboard.html'; return; }
 
     const teachers = await res.json();
     
     if (teachers.length === 0) {
-      document.getElementById('teacherList').innerHTML = '<tr><td colspan="6">No teachers found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px;">No teachers found.</td></tr>';
       return;
     }
 
-    document.getElementById('teacherList').innerHTML = teachers.map(t => `
+    tbody.innerHTML = teachers.map(t => `
       <tr>
         <td>
-          <strong>${escapeHtml(t.full_name)}</strong><br>
-          <span style="color:#64748b; font-size:12px;">@${escapeHtml(t.username)}</span>
+          <strong style="color: var(--navy);">${escapeHtml(t.full_name)}</strong><br>
+          <span style="color:var(--text-muted); font-size:12px;">@${escapeHtml(t.username)}</span>
         </td>
         <td>${escapeHtml(t.department || '—')}</td>
-        <td><span class="badge ${t.role}">${t.role}</span></td>
-        <td><span class="badge ${t.is_active ? 'active' : 'inactive'}">${t.is_active ? 'Active' : 'Inactive'}</span></td>
-        <td>${t.lesson_count}</td>
         <td>
-          <button class="btn-action ${t.is_active ? 'btn-danger' : 'btn-success'}" 
-                  onclick="toggleActive(${t.teacher_id}, ${!t.is_active})">
+          <span style="padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+            background: ${t.role === 'admin' ? '#e0e7ff' : '#f1f5f9'}; 
+            color: ${t.role === 'admin' ? '#3730a3' : '#475569'};">
+            ${t.role}
+          </span>
+        </td>
+        <td>
+          <span style="padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+            background: ${t.is_active ? '#dcfce7' : '#fee2e2'}; 
+            color: ${t.is_active ? '#166534' : '#991b1b'};">
+            ${t.is_active ? 'Active' : 'Inactive'}
+          </span>
+        </td>
+        <td style="font-weight: 600;">${t.lesson_count || 0}</td>
+        <td>
+          <button style="padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; margin-right: 4px;
+            background: ${t.is_active ? '#fee2e2' : '#dcfce7'}; 
+            color: ${t.is_active ? '#991b1b' : '#166534'};" 
+            onclick="toggleActive(${t.teacher_id}, ${!t.is_active})">
             ${t.is_active ? 'Deactivate' : 'Activate'}
           </button>
-          <button class="btn-action btn-primary" 
-                  onclick="changeRole(${t.teacher_id}, '${t.role === 'admin' ? 'teacher' : 'admin'}')">
+          <button style="padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; border: none;
+            background: #e0e7ff; color: #3730a3;" 
+            onclick="changeRole(${t.teacher_id}, '${t.role === 'admin' ? 'teacher' : 'admin'}')">
             Make ${t.role === 'admin' ? 'Teacher' : 'Admin'}
           </button>
         </td>
@@ -42,7 +60,7 @@ async function loadTeachers() {
 
   } catch (err) {
     console.error(err);
-    document.getElementById('teacherList').innerHTML = '<tr><td colspan="6">Error loading teachers.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px; color: red;">Error loading teachers.</td></tr>';
   }
 }
 
@@ -71,10 +89,7 @@ async function changeRole(teacherId, newRole) {
   } catch (err) { console.error(err); }
 }
 
-document.getElementById('logoutBtn').addEventListener('click', (e) => {
-  e.preventDefault(); localStorage.clear(); window.location.href = '/auth/teacher-login.html';
-});
-
+// Helper function to prevent XSS attacks
 function escapeHtml(str) {
   if (!str) return '';
   const div = document.createElement('div');
@@ -82,4 +97,4 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-loadTeachers();
+document.addEventListener('DOMContentLoaded', loadTeachers);

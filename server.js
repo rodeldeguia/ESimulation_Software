@@ -12,6 +12,9 @@ const quizRouter = require('./routes/quizzes');
 const analyticsRouter = require('./routes/analytics')
 const teacherAnalyticsRouter = require('./routes/teacherAnalytics');
 const adminRouter = require('./routes/admin');
+const userRoutes = require('./routes/userRoutes');
+const backupRoutes = require('./routes/backupRoutes');
+const teacherDashboardRoutes = require('./routes/teacherDashboard');
 
 
 
@@ -35,6 +38,9 @@ app.use('/api/quizzes', quizRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/teacher-analytics', teacherAnalyticsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/user', userRoutes);
+app.use('/api/admin', backupRoutes);
+app.use('/api/teacher', teacherDashboardRoutes);
 
 
 
@@ -59,7 +65,7 @@ app.use((err,req,res,next) =>{
 
 
 // start
-app.listen(PORT, () => {
-    console.log(`✅ Server running at http://localhost:${PORT}`);
+app.listen(PORT,'0.0.0.0',() => {
+    console.log(`✅ Server running at ${PORT}`);
 });
 

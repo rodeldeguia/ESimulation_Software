@@ -21,6 +21,7 @@ document.getElementById('quizForm').addEventListener('submit', async (e) => {
     passing_score: document.getElementById('passing_score').value,
     time_limit: document.getElementById('time_limit').value || null,
     max_quiz_attempts: document.getElementById('max_quiz_attempts').value || 3,
+    questions_per_quiz: document.getElementById('questions_per_quiz').value || 10,
     quiz_purpose: 'final' // We are creating a final quiz
   };
 

@@ -218,3 +218,14 @@ exports.getActivityLogs = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+// ADMIN: Get all lessons (approved and pending)
+exports.getAllLessons = async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    res.json(await Admin.getAllLessons());
+  } catch (err) {
+    console.error('getAllLessons error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};

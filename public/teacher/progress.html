@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Progress — SSEGL</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="/css/shared.css">
+  
+  <style>
+    /* Tabs */
+    .tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid var(--border-color); }
+    .tab { padding: 12px 24px; font-size: 15px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+    .tab.active { color: var(--navy); border-bottom-color: var(--navy); }
+    
+    /* Stat Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid var(--border-color); text-align: center; }
+    .stat-card .num { font-size: 28px; font-weight: 800; color: var(--navy); margin-bottom: 4px; }
+    .stat-card .label { font-size: 13px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    
+    /* Progress Bars */
+    .progress-wrapper { display: flex; align-items: center; gap: 12px; }
+    .progress-bar { height: 10px; background: #e2e8f0; border-radius: 5px; width: 100px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 5px; }
+    .fill-green { background-color: #16a34a; }
+    .fill-red { background-color: #dc2626; }
+    .fill-yellow { background-color: #f59e0b; }
+    .fill-blue { background-color: #3b82f6; }
+    
+    /* Charts */
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-top: 24px; }
+    .chart-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid var(--border-color); }
+    .chart-card h3 { font-size: 15px; color: var(--navy); margin-bottom: 16px; text-align: center; font-weight: 700; }
+    .chart-container { position: relative; height: 250px; width: 100%; }
+    
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div style="display: flex; align-items: center;">
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">☰</div>
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Teacher&background=1e3a8a&color=fff" alt="Teacher">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Teacher</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">Teacher Panel</div>
+      <div class="nav-links">
+        <a href="/teacher/dashboard.html">Dashboard</a>
+        <a href="/teacher/students.html">Students</a>
+        <a href="/teacher/lessons.html">Lessons</a>
+        <a href="/teacher/quizzes.html">Quizzes</a>
+        <a href="/teacher/progress.html" class="active">Progress</a>
+        <a href="/teacher/analytics.html">Analytics</a>
+        <a href="/teacher/dictionary.html">Grammar Dictionary</a>
+        <a href="/teacher/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>Progress Analytics</h1>
+      </div>
+
+      <!-- TABS -->
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('individual', this)">Individual Student</div>
+        <div class="tab" onclick="switchTab('class', this)">Class Overview</div>
+        <div class="tab" onclick="switchTab('lesson', this)">Lesson Analytics</div>
+      </div>
+
+      <!-- TAB 1: INDIVIDUAL -->
+      <div id="tab-individual" class="tab-content active">
+        <div style="margin-bottom: 20px;">
+          <select id="studentSelect" onchange="loadStudentProgress()" class="form-group" style="width: 300px; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+            <option value="">Loading students...</option>
+          </select>
+        </div>
+
+        <div class="stats-grid" id="individualStats"></div>
+        
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Lesson</th>
+                <th>Attempts</th>
+                <th>Avg. Correct</th>
+                <th>Avg. Incorrect</th>
+                <th>Highest Score</th>
+                <th>Lowest Score</th>
+                <th>Last Activity</th>
+              </tr>
+            </thead>
+            <tbody id="individualTableBody">
+              <tr><td colspan="7" style="text-align:center; padding:40px; color:#94a3b8;">Select a student to view progress.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="charts-grid">
+          <div class="chart-card"><h3>Answer Accuracy per Lesson</h3><div class="chart-container"><canvas id="barChart"></canvas></div></div>
+          <div class="chart-card"><h3>Score Improvement Over Time</h3><div class="chart-container"><canvas id="lineChart"></canvas></div></div>
+          <div class="chart-card"><h3>Overall Answer Distribution</h3><div class="chart-container"><canvas id="doughnutChart"></canvas></div></div>
+        </div>
+      </div>
+
+      <!-- TAB 2: CLASS OVERVIEW -->
+      <div id="tab-class" class="tab-content">
+        <div style="margin-bottom: 20px;">
+          <select id="gradeFilter" onchange="loadClassProgress()" style="padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+            <option value="all">All Grades</option>
+            <option value="7">Grade 7</option>
+            <option value="8">Grade 8</option>
+            <option value="9">Grade 9</option>
+            <option value="10">Grade 10</option>
+          </select>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Student Name</th>
+                <th>Grade</th>
+                <th>Lessons Passed</th>
+                <th>Avg. Score</th>
+                <th>Overall Progress</th>
+              </tr>
+            </thead>
+            <tbody id="classTableBody">
+              <tr><td colspan="5" style="text-align:center; padding:40px; color:#94a3b8;">Loading class data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 3: LESSON ANALYTICS -->
+      <div id="tab-lesson" class="tab-content">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Lesson Title</th>
+                <th>Total Attempts</th>
+                <th>Pass Rate</th>
+                <th>Class Average</th>
+              </tr>
+            </thead>
+            <tbody id="lessonTableBody">
+              <tr><td colspan="4" style="text-align:center; padding:40px; color:#94a3b8;">Loading lesson data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
+  <script src="/js/teacher-progress.js"></script>
+</body>
+</html>

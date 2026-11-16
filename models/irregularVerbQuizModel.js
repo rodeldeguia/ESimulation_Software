@@ -4,18 +4,32 @@ const pool = require('../config/db');
 module.exports = {
 
   // ─── Get all active questions for a quiz ───
-  async findByQuiz(quizId) {
-    const [rows] = await pool.query(
-      `SELECT question_id, quiz_id, question_text, instructions, points, hint,
-              present_form,  alternative_answers,
-              explanation, example_sentence
-       FROM irregular_verb_quiz
-       WHERE quiz_id = ? AND is_active = 1
-       ORDER BY RAND()`,
-      [quizId]
-    );
-    return rows;
-  },
+async findByQuiz(quizId) {
+  const [rows] = await pool.query(
+    `SELECT
+        question_id,
+        quiz_id,
+        question_text,
+        instructions,
+        points,
+        hint,
+        present_form,
+        past_form,
+        future_form,
+        past_participle,
+        blank_fields,
+        alternative_answers,
+        explanation,
+        example_sentence
+     FROM irregular_verb_quiz
+     WHERE quiz_id = ?
+     AND is_active = 1
+     ORDER BY RAND()`,
+    [quizId]
+  );
+
+  return rows;
+},
 
   // ─── Create a question (used in a later step for teacher quiz builder) ───
   async create({ quiz_id, question_text, instructions, points, hint,

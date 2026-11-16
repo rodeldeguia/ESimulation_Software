@@ -111,7 +111,7 @@ module.exports = {
   async getPendingLessons() {
     const [rows] = await pool.query(
       `SELECT 
-         l.lesson_id, l.title, l.description, l.grade_level, l.lesson_order,
+         l.lesson_id, l.title, l.description, l.discussion_content, l.grade_level, l.lesson_order,
          l.created_at, l.teacher_id,
          t.full_name AS teacher_name
        FROM lessons l
@@ -119,6 +119,7 @@ module.exports = {
        WHERE l.is_published = 0
        ORDER BY l.created_at DESC`
     );
+
     return rows;
   },
 
@@ -141,6 +142,27 @@ module.exports = {
     return Object.fromEntries(
       Object.entries(r).map(([k, v]) => [k, Number(v)])
     );
-  }
+  },
+    // ─── Get ALL lessons (for Admin Management) ───
+  async getAllLessons() {
+    const [rows] = await pool.query(
+      `SELECT 
+         l.lesson_id, 
+         l.title, 
+         l.description, 
+         l.discussion_content, 
+         l.grade_level, 
+         l.lesson_order,
+         l.is_published,
+         l.created_at, 
+         l.teacher_id,
+         t.full_name AS teacher_name
+       FROM lessons l
+       LEFT JOIN teachers t ON t.teacher_id = l.teacher_id
+       ORDER BY l.lesson_order ASC` // Order by sequence (1, 2, 3...)
+    );
+    return rows;
+  },
 
 };
+

@@ -17,15 +17,19 @@ module.exports = {
         const [result] = await pool.query('INSERT INTO student_quiz_sessions(student_id, quiz_id, lesson_id, session_type, session_code, selected_questions, total_questions, attempt_number) VALUES(?,?,?,?,?,?,?,?)',
                                                                             [student_id, quiz_id,lesson_id,session_type,session_code, JSON.stringify(selected_questions), total_questions, attempt_number])
 
-        return {
-            session_id: result.insertId,
-            session_code,
-            attempt_number,
-            student_id,
-            quiz_id,
-            lesson_id,
-            session_type
-        };                                                                  
+           // Fetch the newly created session to get the started_at timestamp
+    const [newSession] = await pool.query('SELECT started_at FROM student_quiz_sessions WHERE session_id = ?', [result.insertId]);
+
+    return {
+      session_id: result.insertId,
+      session_code,
+      attempt_number,
+      student_id,
+      quiz_id,
+      lesson_id,
+      session_type,
+      started_at: newSession[0].started_at // ⬅️ THIS WAS MISSING
+    };                                                                
     },
 
 

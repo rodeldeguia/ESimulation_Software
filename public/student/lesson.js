@@ -36,19 +36,29 @@ async function loadLesson() {
     // ⬇️ 1. FETCH QUIZZES ONCE AND SAVE IT ⬇️
         // ⬇️ 1. CHECK FOR PRE-TEST FIRST (Before rendering anything) ⬇️
     let allQuizzes = [];
+    let visibleQuizzes = []
+
+ 
+
     const quizRes = await fetch(`/api/lessons/${lessonId}/quizzes`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     
     if (quizRes.ok && !isPreview) {
       allQuizzes = await quizRes.json();
+
+      console.log(allQuizzes);
+console.log(visibleQuizzes);
       
       // Debug: see what the server actually sent
       console.log("Quizzes received from server:", allQuizzes);
       
       // Find the pre-test safely
       const preTest = allQuizzes.find(q => q.quiz_purpose === 'pretest');
-      
+      visibleQuizzes = allQuizzes.filter(
+    q => q.quiz_purpose !== 'pretest'
+);
+
       if (preTest) {
         console.log("Pre-test found:", preTest);
         const hasTakenPreTest = localStorage.getItem(`pretest_done_${lessonId}`);
@@ -64,7 +74,7 @@ async function loadLesson() {
     // 2. Render Lesson
     document.getElementById('lessonContent').innerHTML = `
       <h1>${escapeHtml(lesson.title)}</h1>
-      <p class="meta">Grade ${lesson.grade_level} • Lesson ${lesson.lesson_order}</p>
+            <p class="meta">Grade ${Array.isArray(lesson.grade_level) ? lesson.grade_level.join(', ') : lesson.grade_level} • Lesson ${lesson.lesson_order}</p>
       <div class="content" id="lessonBody">${lesson.discussion_content}</div>
       <div id="quizSection" style="margin-top:40px; border-top:1px solid #e2e8f0; padding-top:24px;"></div>
     `;
@@ -108,7 +118,7 @@ async function loadLesson() {
       if (allQuizzes.length > 0) {
         quizSection.innerHTML = `
           <h2 style="color:#1e3a8a; margin-bottom:16px;">Quizzes for this Lesson</h2>
-          ${allQuizzes.map(q => `
+          ${visibleQuizzes.map(q => `
             <div style="background:#f1f5f9; padding:16px; border-radius:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <strong>${escapeHtml(q.title)}</strong>

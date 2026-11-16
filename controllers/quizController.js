@@ -17,14 +17,15 @@ exports.getForStudent = async (req,res) => {
     try {
         
          let safeQuestions = [];
-        let questions = [];
+         let questions = [];
+         const quiz = await Quiz.findById(req.params.id);
         questions = questions.sort(() => 0.5 - Math.random());
 
-        const limit = Quiz.questions_per_quiz || questions.length;
+        const limit = quiz.questions_per_quiz || questions.length;
         questions = questions.slice(0, limit);
 
       
-        const quiz = await Quiz.findById(req.params.id);
+        console.log(quiz);
         if(!quiz) return res.status(404).json({error : `Quiz not Available`});
         if(!quiz.is_published) return res.status (403).json({error : ' Quiz is not available'});
 
@@ -39,18 +40,23 @@ exports.getForStudent = async (req,res) => {
                 points: q.points,
                 options: q.options
         }));
-        } else if (quiz.quiz_type === 'irregular_verb') {
+               } else if (quiz.quiz_type === 'irregular_verb') {
             questions = await IrregularVerbQuiz.findByQuiz(quiz.quiz_id);
+            console.log(questions);
             safeQuestions = questions.map(q => ({
                 question_id: q.question_id,
-                question_type: 'text_input',            // ⬅️ tag it
+                question_type: 'text_input',
                 question_text: q.question_text,
                 instructions: q.instructions,
                 hint: q.hint,
                 points: q.points,
                 present_form: q.present_form,
-                ask_for: q.ask_for
-        }));
+                past_form: q.past_form,
+                future_form: q.future_form,
+                past_participle: q.past_participle,
+                blank_fields: q.blank_fields // ⬅️ THIS WAS MISSING
+            }));
+        
         } else if (quiz.quiz_type === 'clause') {
             questions = await ClauseQuiz.findByQuiz(quiz.quiz_id);
             safeQuestions = questions.map(q => ({
@@ -115,14 +121,74 @@ exports.getForStudent = async (req,res) => {
             return res.status(400).json({ error: `Quiz type "${quiz.quiz_type}" not yet supported` });
         }
         // to create session
-        const session = await Session.create({
-            student_id: req.user.id,
-            quiz_id: quiz.quiz_id,
-            lesson_id: quiz.lesson_id,
-            session_type: quiz.quiz_purpose,
-            selected_questions: questions.map(q => q.question_id),
-            total_questions: questions.length
-        });
+               // ⬇️ CHECK FOR AN ACTIVE SESSION FIRST ⬇️
+              // ⬇️ CHECK FOR AN ACTIVE (INCOMPLETE) SESSION FIRST ⬇️
+          // ⬇️ CHECK FOR AN ACTIVE (INCOMPLETE) SESSION FIRST ⬇️
+        const isPreview = req.query.preview === 'true';
+          let session;
+
+           if (!isPreview) {
+            // Normal student flow: check for active session or create one
+            const [existingSessions] = await pool.query(
+            `SELECT * FROM student_quiz_sessions 
+             WHERE student_id = ? AND quiz_id = ? AND completed_at IS NULL 
+             ORDER BY session_id DESC LIMIT 1`,
+            [req.user.id, quiz.quiz_id]
+        );
+              if (existingSessions.length > 0) {
+            session = existingSessions[0];
+        } else {
+            session = await Session.create({
+                student_id: req.user.id,
+                quiz_id: quiz.quiz_id,
+                lesson_id: quiz.lesson_id,
+                session_type: quiz.quiz_purpose,
+                selected_questions: questions.map(q => q.question_id),
+                total_questions: questions.length
+            });
+        }
+        } else {
+            // Preview flow: fake a session object just for the frontend
+            session = { session_id: null, session_code: 'PREVIEW', attempt_number: 1 };
+        }
+        
+       
+
+      
+
+        // ⬇️ Calculate remaining time ⬇️
+        let timeRemaining = null;
+        
+        if (quiz.time_limit) {
+            const start = new Date(session.started_at).getTime();
+            const now = new Date().getTime();
+            const secondsElapsed = Math.floor((now - start) / 1000);
+            timeRemaining = (quiz.time_limit * 60) - secondsElapsed;
+            
+            // If time is up, close the session, but DO NOT block the student
+            if (timeRemaining <= 0) {
+                // 1. Fail the old session
+                await Session.complete(session.session_id, {
+                    score: 0,
+                    is_passed: false,
+                    time_taken: quiz.time_limit * 60,
+                    answered_questions: 0
+                });
+
+                // 2. Create a fresh session immediately
+                session = await Session.create({
+                    student_id: req.user.id,
+                    quiz_id: quiz.quiz_id,
+                    lesson_id: quiz.lesson_id,
+                    session_type: quiz.quiz_purpose,
+                    selected_questions: questions.map(q => q.question_id),
+                    total_questions: questions.length
+                });
+
+                // 3. Give them the full time again
+                timeRemaining = quiz.time_limit * 60; 
+            }
+        }
 
         res.json({
             quiz : {
@@ -140,7 +206,8 @@ exports.getForStudent = async (req,res) => {
             session: {
                 session_id: session.session_id,
                 session_code: session.session_code,
-                attempt_number: session.attempt_number
+                attempt_number: session.attempt_number,
+                time_remaining: timeRemaining
             }
         });
 
@@ -148,9 +215,9 @@ exports.getForStudent = async (req,res) => {
         console.error('Quiz getForStudent Error:',error);
         res.status(500).json({error: 'Internal Server Error'});
         
-    }
-};
+    };
 
+};
 exports.submit = async (req,res) => {
 
     try {
@@ -185,18 +252,34 @@ exports.submit = async (req,res) => {
 
         if(!session_id) return res.status(400).json({ error : 'session_id required'})
 
-        const session = await Session.findById(session_id);
-        if(!session) return res.status(400).json({error : 'session not found'})
 
-        if(session.student_id !== req.user.id){
-            return res.status(403).json({error : 'this session does not belomng to you'});
-        }
+          let session = null;// to by pass the session for the teahcer
+          const isTeacherTest = (session_id === 999999 && (req.user.role === 'teacher' || req.user.role === 'admin'));
 
+ if (isTeacherTest) {
+      // Fake session for teacher testing
+      session = { session_id: 999999, student_id: req.user.id, quiz_id: quiz.quiz_id };
+    } else {
+      session = await Session.findById(session_id);
+      if(!session) return res.status(400).json({error : 'session not found'})
+
+      if(session.student_id !== req.user.id){
+        return res.status(403).json({error : 'this session does not belong to you'});
+      }
+
+
+
+
+        
+       
         if(session.quiz_id !== quiz.quiz_id){
             return res.status(400).json({error : 'Session does not match this quiz'})
         }
+      }
+        // ─── Backend Timer Enforcement ───
+       
 
-        //
+      
         
         const questionMap = new Map(questions.map(q => [q.question_id, q]));
         
@@ -210,6 +293,7 @@ exports.submit = async (req,res) => {
             let isCorrect = false;
             let studentAnswerJSON = null;
             let svaReason = null;
+            let nlpDetectedPattern = null;
 
 
             // ─── Validate based on quiz type ───
@@ -217,44 +301,38 @@ exports.submit = async (req,res) => {
                 isCorrect = Number(answer.selected_index) === q.correct_option_index;
                 studentAnswerJSON = { selected_index: Number(answer.selected_index) };
                 
-        } else if (quiz.quiz_type === 'irregular_verb') {
+
+
+                 } else if (quiz.quiz_type === 'irregular_verb') {
       const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
       const studentData = answer.data || {};
       
-      let allCorrect = true;
-      const correctAnswersMap = {
-        present: q.present_form,
-        past: q.past_form,
-        future: q.future_form,
-        past_participle: q.past_participle
-      };
+      // If the student didn't send any data, it's an automatic fail
+      if (Object.keys(studentData).length === 0) {
+        isCorrect = false;
+        studentAnswerJSON = { data: {}, reason: 'No answers provided' };
+      } else {
+        let allCorrect = true;
+        const correctAnswersMap = {
+          present: q.present_form,
+          past: q.past_form,
+          future: q.future_form,
+          past_participle: q.past_participle
+        };
 
-      // If teacher provided alternatives (like "learnt" for "learned"), parse it
-      const alternatives = typeof q.alternative_answers === 'string' 
-        ? JSON.parse(q.alternative_answers || '{}') 
-        : (q.alternative_answers || {});
-
-      for (const field of blanks) {
-        const studentAnswer = String(studentData[field] || '').trim().toLowerCase();
-        const correctAnswer = String(correctAnswersMap[field] || '').trim().toLowerCase();
-        
-        let isThisBlankCorrect = (studentAnswer === correctAnswer);
-
-        // Check if the student typed an alternative answer
-        if (!isThisBlankCorrect && alternatives[field]) {
-          isThisBlankCorrect = alternatives[field].some(alt => 
-            String(alt).trim().toLowerCase() === studentAnswer
-          );
+        for (const field of blanks) {
+          const studentAnswer = String(studentData[field] || '').trim().toLowerCase();
+          const correctAnswer = String(correctAnswersMap[field] || '').trim().toLowerCase();
+          
+          if (studentAnswer !== correctAnswer) {
+            allCorrect = false;
+          }
         }
 
-        if (!isThisBlankCorrect) {
-          allCorrect = false;
-        }
+        isCorrect = allCorrect;
+        studentAnswerJSON = { data: studentData };
       }
-
-      isCorrect = allCorrect;
-      studentAnswerJSON = { data: studentData };
-         
+    
 
     
 
@@ -291,8 +369,8 @@ exports.submit = async (req,res) => {
 
                 studentAnswerJSON = { text: answer.text || '', reason: svaReason };
 
-                   } else if (quiz.quiz_type === 'phrasal_verb') {
-      const sentence = String(answer.text || '').toLowerCase().replace(/[.,!?;:]/g, '');
+    } else if (quiz.quiz_type === 'phrasal_verb') {
+      const sentence = String(answer.text || '').trim().toLowerCase().replace(/[.,!?;:]/g, '');
       const studentVerb = String(answer.phrasal_verb_answer || '').trim().toLowerCase();
 
       if (!sentence || !studentVerb) {
@@ -302,25 +380,19 @@ exports.submit = async (req,res) => {
         // Check if the student's typed verb appears in their sentence
         const verbInSentence = sentence.includes(studentVerb);
         
-        // Optional: Use winkNLP to verify it's actually a verb+particle combo
-        const doc = nlp.readDoc(sentence);
-        let hasVerb = false;
-        doc.tokens().each(t => { if (t.out(its.pos) === 'VERB') hasVerb = true; });
-
-        if (!hasVerb) {
+        if (!verbInSentence) {
           isCorrect = false;
-          studentAnswerJSON = { text: sentence, phrasal_verb_answer: studentVerb, reason: 'Your sentence does not contain a verb.' };
-        } else if (!verbInSentence) {
-          isCorrect = false;
-          studentAnswerJSON = { text: sentence, phrasal_verb_answer: studentVerb, reason: `The phrasal verb "${studentVerb}" was not found in your sentence.` };
+          studentAnswerJSON = { 
+            text: sentence, 
+            phrasal_verb_answer: studentVerb, 
+            reason: `The phrasal verb "${studentVerb}" was not found in your sentence.` 
+          };
         } else {
           isCorrect = true;
           studentAnswerJSON = { text: sentence, phrasal_verb_answer: studentVerb, reason: 'Correct!' };
         }
       }
-    
-
-            } else if (quiz.quiz_type === 'sentence_pattern') {
+    } else if (quiz.quiz_type === 'sentence_pattern') {
       // The student sends: answer.text (their sentence) and answer.selected_pattern
       // We use winkNLP to verify if the sentence actually matches the selected pattern.
       const nlpResult = NlpService.validateSentencePatternWithNlp(
@@ -332,14 +404,18 @@ exports.submit = async (req,res) => {
       studentAnswerJSON = {
         text: answer.text || '',
         selected_pattern: answer.selected_pattern || '',
-        reason: nlpResult.reason || null
+        reason: nlpResult.reason || null,
+
       };
+
+       nlpDetectedPattern = nlpResult.detected_pattern;
     }
+
 
 
             if (isCorrect) correctCount ++;
 
-
+if(!isTeacherTest){// save it its not a teachcer
             await Answer.save({
                 session_id: session.session_id,
                 student_id: req.user.id,
@@ -350,8 +426,10 @@ exports.submit = async (req,res) => {
                 question_id: q.question_id,
                 student_answer: studentAnswerJSON ? JSON.stringify(studentAnswerJSON) : null,
                 is_correct: isCorrect,
-                score_earned: isCorrect ? q.points : 0
-            });
+                score_earned: isCorrect ? q.points : 0,
+                time_taken: req.body.time_taken || 0,
+                system_detected_answer: quiz.quiz_type === 'sentence_pattern' ? { pattern: nlpDetectedPattern } : null
+            });}
 
 
             results.push({
@@ -367,24 +445,26 @@ exports.submit = async (req,res) => {
                         ...(quiz.quiz_type === 'preposition' ? {
                     selected_index: Number(answer.selected_index),
                     selected_answer: q.options[answer.selected_index] || null,
-                    correct_index: q.correct_option_index,
-                    correct_answer: q.correct_answer
+                    // correct_index: q.correct_option_index,
+                    // correct_answer: q.correct_answer
                     } : {}),
 
                     ...(quiz.quiz_type === 'irregular_verb' ? {
-                    selected_answer: answer.text || '(none)',
-                    correct_answer: q.correct_answer,
+                    student_answers: answer.data || '(none)',
                     present_form: q.present_form,
-                    ask_for: q.ask_for
+                    past_form: q.past_form,
+                    future_form: q.future_form,
+                    past_participle: q.past_participle,
+                    blank_fields: q.blank_fields
                     } : {}),
 
                     ...(quiz.quiz_type === 'clause' ? {
                     selected_index: Number(answer.selected_index),
                     selected_answer: q.options[answer.selected_index] || null,
-                    correct_index: q.correct_option_index,
-                    correct_answer: q.options[q.correct_option_index],
+                    // correct_index: q.correct_option_index,
+                    //correct_answer: q.options[q.correct_option_index],
                     selected_type: answer.selected_type || null,
-                    correct_type: q.clause_type,
+                    //correct_type: q.clause_type,
                     clause_correct: Number(answer.selected_index) === q.correct_option_index,
                     type_correct: String(answer.selected_type || '').trim().toLowerCase() === String(q.clause_type || '').trim().toLowerCase(),
                     sentence: q.sentence
@@ -400,7 +480,8 @@ exports.submit = async (req,res) => {
 
                     ...(quiz.quiz_type === 'phrasal_verb' ? {
                     student_text: answer.text || '',
-                    target_phrasal_verb: q.target_phrasal_verb,
+                    //target_phrasal_verb: q.target_phrasal_verb,
+                     phrasal_verb_answer: answer.phrasal_verb_answer || '',
                     example_sentence: q.example_sentence,
                     reason: svaReason
                     } : {}),
@@ -408,8 +489,8 @@ exports.submit = async (req,res) => {
                     ...(quiz.quiz_type === 'sentence_pattern' ? {
                     student_text: answer.text || '',
                     selected_pattern: answer.selected_pattern || '',
-                    correct_pattern: q.target_pattern,
-                    pattern_correct: String(answer.selected_pattern || '').trim().toUpperCase() === String(q.target_pattern || '').trim().toUpperCase(),
+                   // correct_pattern: q.target_pattern,
+                    //pattern_correct: String(answer.selected_pattern || '').trim().toUpperCase() === String(q.target_pattern || '').trim().toUpperCase(),
                     reason: studentAnswerJSON.reason
                     } : {}),
             });
@@ -420,30 +501,44 @@ exports.submit = async (req,res) => {
         const roundedPercentage = Math.round(percentage * 100) / 100;
         const passed = percentage >= Number(quiz.passing_score);
 
+               // Count only the questions where the student actually provided an answer
+        const actualAnsweredCount = answers.filter(a => {
+            if (a.selected_index !== null && a.selected_index !== undefined) return true;
+            if (a.text && a.text.trim() !== '') return true;
+            if (a.selected_type) return true;
+            if (a.selected_pattern) return true;
+            if (a.phrasal_verb_answer && a.phrasal_verb_answer.trim() !== '') return true;
+            if (a.data && Object.keys(a.data).length > 0) return true;
+            return false;
+        }).length;
+
+
+
+         if (!isTeacherTest) {
         await Session.complete(session.session_id, {
             score: roundedPercentage,
             is_passed: passed,
             time_taken: time_taken || 0,
-            answered_questions: answers.length
+            answered_questions: actualAnsweredCount // ⬅️ Now it counts correctly!
         });
 
 
-            // Update lesson progress
-        await Progress.ensureExists({
-            student_id: req.user.id,
-            lesson_id: quiz.lesson_id,
-            initial_status: 'reading_required',
-            final_available: true
-        });
+            // Update lesson progress - onl;y update if real student is pass
+               // Only update progress if it's a real student session
+        if (session_id !== 999999) {
+            await Progress.ensureExists({
+                student_id: req.user.id,
+                lesson_id: quiz.lesson_id,
+                initial_status: 'reading_required',
+                final_available: true
+            });
 
-        if (passed) {
-            await Progress.markPassed({student_id: req.user.id,lesson_id: quiz.lesson_id,score: roundedPercentage
-        });
-
-        } else {
-            await Progress.markFailed({student_id: req.user.id, lesson_id: quiz.lesson_id,score: roundedPercentage});
+            if (passed) {
+                await Progress.markPassed({student_id: req.user.id,lesson_id: quiz.lesson_id,score: roundedPercentage});
+            } else {
+                await Progress.markFailed({student_id: req.user.id, lesson_id: quiz.lesson_id,score: roundedPercentage});
+            }
         }
-
 
         res.json({
             quiz_id : quiz.quiz_id,
@@ -458,13 +553,14 @@ exports.submit = async (req,res) => {
             passed,
             results
         });
-
+      }
     } catch (error) {
         console.error('submit Error',error);
-        res.status(500).json({error : 'Server Error'})
+        res.status(500).json({error : 'Server Error'});
         
-    };
-
+    }
+}
+  
     // ─── Phase 10: Rule-based SVA validation ───
 // Phase 11 will replace this with full NLP validation
     function validateSvaAnswer(text, q) {
@@ -574,7 +670,7 @@ exports.submit = async (req,res) => {
 
     return { isCorrect: true };
     }
-}
+
 
 // ═══════════════════════════════════════════════════════
 // TEACHER: Create quiz
@@ -810,5 +906,320 @@ exports.updateQuizSettings = async (req, res) => {
     res.json({ message: 'Settings updated' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
+  }
+
+};
+
+// TEACHER: Suggest a new word
+exports.suggestWord = async (req, res) => {
+  try {
+    const { word, type } = req.body; // type: 'verb' or 'collective_noun'
+    if (!word || !type) return res.status(400).json({ error: 'Word and type required' });
+
+    // Check if it already exists in the main dictionary
+    const table = type === 'verb' ? 'verbs_dictionary' : 'collective_nouns_dictionary';
+    const column = type === 'verb' ? 'base_form' : 'noun';
+    const [existing] = await pool.query(`SELECT id FROM ${table} WHERE ${column} = ?`, [word.toLowerCase()]);
+    if (existing.length > 0) return res.status(400).json({ error: 'Word already exists in dictionary' });
+
+    // Check if already suggested
+    const [pending] = await pool.query('SELECT id FROM grammar_suggestions WHERE word = ? AND type = ? AND status = "pending"', [word.toLowerCase(), type]);
+    if (pending.length > 0) return res.status(400).json({ error: 'Word is already pending approval' });
+
+    await pool.query(
+      'INSERT INTO grammar_suggestions (word, type, suggested_by) VALUES (?, ?, ?)',
+      [word.toLowerCase(), type, req.user.id]
+    );
+
+    res.status(201).json({ message: 'Word suggested. Waiting for admin approval.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ADMIN: Get pending suggestions
+exports.getSuggestions = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const [rows] = await pool.query(
+      `SELECT s.*, t.full_name as teacher_name 
+       FROM grammar_suggestions s 
+       JOIN teachers t ON t.teacher_id = s.suggested_by 
+       WHERE s.status = 'pending' ORDER BY s.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ADMIN: Approve a suggestion
+exports.approveSuggestion = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    
+    const suggestionId = req.params.id;
+
+    // 1. Get the suggestion details
+    const [rows] = await pool.query('SELECT * FROM grammar_suggestions WHERE id = ?', [suggestionId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Suggestion not found' });
+    
+    const suggestion = rows[0];
+
+    // 2. Add to the correct dictionary table
+    if (suggestion.type === 'verb') {
+      await pool.query('INSERT INTO verbs_dictionary (base_form, is_approved, created_by) VALUES (?, 1, ?)', 
+        [suggestion.word, suggestion.suggested_by]);
+    } else if (suggestion.type === 'collective_noun') {
+      await pool.query('INSERT INTO collective_nouns_dictionary (noun, is_approved, created_by) VALUES (?, 1, ?)', 
+        [suggestion.word, suggestion.suggested_by]);
+    }
+
+    // 3. Update status to approved
+    await pool.query('UPDATE grammar_suggestions SET status = "approved" WHERE id = ?', [suggestionId]);
+
+    res.json({ success: true, message: 'Suggestion approved' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to approve suggestion' });
+  }
+};
+
+exports.rejectSuggestion = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    
+    const suggestionId = req.params.id;
+
+    await pool.query('UPDATE grammar_suggestions SET status = "rejected" WHERE id = ?', [suggestionId]);
+
+    res.json({ success: true, message: 'Suggestion rejected' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to reject suggestion' });
+  }
+};
+
+// TEACHER: Delete a question
+exports.deleteQuestion = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Teacher access only' });
+    }
+
+    const { id, questionId } = req.params;
+    const quiz = await Quiz.findById(id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    const Model = QuestionFactory.getModel(quiz.quiz_type);
+    if (!Model) return res.status(400).json({ error: 'Unknown quiz type' });
+
+    // Delete the question (assuming all models have a delete function)
+    await pool.query(`DELETE FROM ${quiz.quiz_type}_quiz WHERE question_id = ?`, [questionId]);
+
+    res.json({ message: 'Question deleted successfully' });
+  } catch (err) {
+    console.error('deleteQuestion error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// TEACHER: Update a question
+exports.updateQuestion = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Teacher access only' });
+    }
+
+    const { id, questionId } = req.params;
+    const quiz = await Quiz.findById(id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    const type = quiz.quiz_type;
+    const payload = req.body;
+
+    // Here we do a simple delete + insert to handle all 6 quiz types easily
+    await pool.query(`DELETE FROM ${type}_quiz WHERE question_id = ?`, [questionId]);
+
+    // Now insert it as a new question (using the Model factory)
+    const Model = QuestionFactory.getModel(type);
+    const newQuestionData = { ...payload, quiz_id: quiz.quiz_id, created_by: req.user.id };
+    await Model.create(newQuestionData);
+
+    res.json({ message: 'Question updated successfully' });
+  } catch (err) {
+    console.error('updateQuestion error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+
+// DELETE /api/quizzes/:id
+exports.deleteQuiz = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Teacher access only' });
+    }
+
+    const quizId = req.params.id;
+
+    // Delete the quiz (Foreign keys will cascade and delete the questions)
+    const [result] = await pool.query('DELETE FROM quizzes WHERE quiz_id = ?', [quizId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    res.json({ message: 'Quiz deleted successfully' });
+  } catch (err) {
+    console.error('deleteQuiz error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+
+// TEACHER: Get all approved dictionary words
+exports.getDictionary = async (req, res) => {
+  try {
+    const [verbs] = await pool.query('SELECT base_form as word FROM verbs_dictionary WHERE is_approved = 1');
+    const [nouns] = await pool.query('SELECT noun as word FROM collective_nouns_dictionary WHERE is_approved = 1');
+    
+    res.json({
+      verbs: verbs.map(v => v.word),
+      nouns: nouns.map(n => n.word)
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// controllers/quizController.js
+exports.getQuizQuestions = async (req, res) => {
+  try {
+    const quizId = req.params.id;
+    
+    // 1. Get the quiz to know its type
+    const [quizRows] = await pool.query('SELECT quiz_type FROM quizzes WHERE quiz_id = ?', [quizId]);
+    if (quizRows.length === 0) return res.status(404).json({ error: 'Quiz not found' });
+    
+    const type = quizRows[0].quiz_type;
+    
+    // 2. Fetch from the correct table
+    let table = '';
+    if (type === 'irregular_verb') table = 'irregular_verb_quiz';
+    else if (type === 'preposition') table = 'preposition_quiz';
+    else if (type === 'clause') table = 'clause_quiz';
+    else if (type === 'phrasal_verb') table = 'phrasal_verb_quiz';
+    else if (type === 'sva') table = 'sva_quiz';
+    else if (type === 'sentence_pattern') table = 'sentence_pattern_quiz';
+    else return res.status(400).json({ error: 'Unknown quiz type' });
+
+    const [questions] = await pool.query(`SELECT * FROM ${table} WHERE quiz_id = ?`, [quizId]);
+    res.json(questions);
+    
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.testSubmit = async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    // 1. Fetch questions
+    let questions;
+    if (quiz.quiz_type === 'preposition') questions = await PrepositionQuiz.findByQuiz(quiz.quiz_id);
+    else if (quiz.quiz_type === 'irregular_verb') questions = await IrregularVerbQuiz.findByQuiz(quiz.quiz_id);
+    else if (quiz.quiz_type === 'clause') questions = await ClauseQuiz.findByQuiz(quiz.quiz_id);
+    else if (quiz.quiz_type === 'sva') questions = await SvaQuiz.findByQuiz(quiz.quiz_id);
+    else if (quiz.quiz_type === 'phrasal_verb') questions = await PhrasalVerbQuiz.findByQuiz(quiz.quiz_id);
+    else if (quiz.quiz_type === 'sentence_pattern') questions = await SentencePatternQuiz.findByQuiz(quiz.quiz_id);
+
+    const { answers } = req.body;
+    const questionMap = new Map(questions.map(q => [q.question_id, q]));
+    
+    let correctCount = 0;
+    const results = [];
+
+    for (const answer of answers) {
+      const q = questionMap.get(answer.question_id);
+      if (!q) continue;
+
+      let isCorrect = false;
+      let studentAnswerJSON = null;
+      let svaReason = null;
+      let nlpDetectedPattern = null;
+
+      // ─── VALIDATION LOGIC (Identical to Student) ───
+      if (quiz.quiz_type === 'preposition') {
+        isCorrect = Number(answer.selected_index) === q.correct_option_index;
+      } 
+      else if (quiz.quiz_type === 'irregular_verb') {
+        const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
+        const studentData = answer.data || {};
+        let allCorrect = true;
+        const correctAnswersMap = { present: q.present_form, past: q.past_form, future: q.future_form, past_participle: q.past_participle };
+        for (const field of blanks) {
+          if (String(studentData[field] || '').trim().toLowerCase() !== String(correctAnswersMap[field] || '').trim().toLowerCase()) {
+            allCorrect = false;
+          }
+        }
+        isCorrect = allCorrect && Object.keys(studentData).length > 0;
+      } 
+      else if (quiz.quiz_type === 'clause') {
+        const clauseCorrect = Number(answer.selected_index) === q.correct_option_index;
+        const typeCorrect = String(answer.selected_type || '').trim().toLowerCase() === String(q.clause_type || '').trim().toLowerCase();
+        isCorrect = clauseCorrect && typeCorrect;
+      }
+      else if (quiz.quiz_type === 'sva') {
+        const nlpResult = NlpService.validateSvaWithNlp(answer.text, q);
+        const ruleResult = validateSvaAnswer(answer.text, q);
+        isCorrect = nlpResult.isCorrect && ruleResult.isCorrect;
+        svaReason = !nlpResult.isCorrect ? nlpResult.reason : !ruleResult.isCorrect ? ruleResult.reason : null;
+      } 
+      else if (quiz.quiz_type === 'phrasal_verb') {
+        const sentence = String(answer.text || '').trim().toLowerCase().replace(/[.,!?;:]/g, '');
+        const studentVerb = String(answer.phrasal_verb_answer || '').trim().toLowerCase();
+        isCorrect = sentence.includes(studentVerb) && studentVerb.length > 0;
+        if (!isCorrect) svaReason = `Sentence must include the phrasal verb "${studentVerb}"`;
+      } 
+      else if (quiz.quiz_type === 'sentence_pattern') {
+        const nlpResult = NlpService.validateSentencePatternWithNlp(answer.text, answer.selected_pattern);
+        isCorrect = nlpResult.isCorrect;
+        svaReason = nlpResult.reason;
+        nlpDetectedPattern = nlpResult.detected_pattern;
+      }
+
+      if (isCorrect) correctCount++;
+
+      // Format the result to send back
+      results.push({
+        question_id: q.question_id,
+        is_correct: isCorrect,
+        ...(quiz.quiz_type === 'preposition' ? { selected_answer: q.options[answer.selected_index] || null, correct_answer: q.options[q.correct_option_index] } : {}),
+        ...(quiz.quiz_type === 'irregular_verb' ? { student_answers: answer.data || {}, present_form: q.present_form, past_form: q.past_form, future_form: q.future_form, past_participle: q.past_participle } : {}),
+        ...(quiz.quiz_type === 'clause' ? { selected_answer: q.options[answer.selected_index] || null, correct_answer: q.options[q.correct_option_index], selected_type: answer.selected_type, correct_type: q.clause_type } : {}),
+        ...(quiz.quiz_type === 'sva' ? { student_text: answer.text || '', example_sentence: q.example_sentence, reason: svaReason } : {}),
+        ...(quiz.quiz_type === 'phrasal_verb' ? { student_text: answer.text || '', target_phrasal_verb: q.target_phrasal_verb, reason: svaReason } : {}),
+        ...(quiz.quiz_type === 'sentence_pattern' ? { student_text: answer.text || '', selected_pattern: answer.selected_pattern || '', detected_pattern: nlpDetectedPattern, reason: svaReason } : {}),
+      });
+    }
+
+    const total = results.length;
+    const percentage = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+
+    res.json({
+      score: correctCount,
+      total,
+      percentage,
+      passed: percentage >= Number(quiz.passing_score),
+      results
+    });
+
+  } catch (error) {
+    console.error('testSubmit Error:', error);
+    res.status(500).json({ error: 'Server Error' });
   }
 };

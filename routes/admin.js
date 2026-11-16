@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/adminController');
 const auth    = require('../middleware/middlewareAuth');
+const settingsController = require('../controllers/settingsController');
 
 router.use(auth);
 
@@ -10,6 +11,7 @@ router.use(auth);
 router.get('/overview', ctrl.getOverview);
 
 // Teachers
+router.get('/lessons', ctrl.getAllLessons);
 router.get('/teachers',                        ctrl.getAllTeachers);
 router.patch('/teachers/:id/active',           ctrl.toggleTeacherActive);
 router.patch('/teachers/:id/role',             ctrl.changeTeacherRole);
@@ -26,4 +28,7 @@ router.patch('/lessons/:id/reject',            ctrl.rejectLesson);
 // Activity logs
 router.get('/logs',                            ctrl.getActivityLogs);
 
+
+router.put('/settings/profile', settingsController.updateProfile);
+router.put('/settings/password', settingsController.changePassword);
 module.exports = router;

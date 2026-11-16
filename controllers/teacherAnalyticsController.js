@@ -43,3 +43,13 @@ exports.getStudentDetail = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+exports.getClassAnalytics = async (req, res) => {
+  if (!requireTeacher(req, res)) return;
+  try {
+    const data = await TeacherAnalytics.getClassAnalytics();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
