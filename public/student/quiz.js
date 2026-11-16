@@ -3,9 +3,16 @@
 const token = localStorage.getItem('token');
 if (!token) window.location.href = '/auth/student-login.html';
 
-const params   = new URLSearchParams(window.location.search);
-const quizId   = params.get('id');
+const user = JSON.parse(localStorage.getItem('user') || '{}');
+const params = new URLSearchParams(window.location.search);
+const quizId = params.get('id');
 if (!quizId) window.location.href = '/student/lessons.html';
+
+// ⬇️ Secure Preview Mode
+// Only allow preview if the URL says so AND the user is a teacher/admin
+const requestedPreview = params.get('preview') === 'true';
+const isTeacher = user.role === 'teacher' || user.role === 'admin';
+const isPreview = requestedPreview && isTeacher; 
 
 const app = document.getElementById('app');
 
@@ -29,7 +36,7 @@ let startTime   = null;
 // ─────────────────────────────────────────
 async function loadQuiz() {
   try {
-    const res = await fetch(`/api/quizzes/${quizId}`, {
+    const res = await fetch(`/api/quizzes/${quizId}${isPreview ? '?preview=true' : ''}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
 
@@ -49,6 +56,11 @@ async function loadQuiz() {
     questions = data.questions;
     sessionId = data.session.session_id;
     startTime = Date.now();
+    console.log(data.session);
+console.log(data.session.time_remaining);
+console.log('SESSION:', data.session);
+console.log('TIME REMAINING:', data.session.time_remaining);
+console.log('QUIZ:', data.quiz);
 
     if (questions.length === 0) {
       app.innerHTML = '<h2>This quiz has no questions yet.</h2>';
@@ -67,11 +79,16 @@ async function loadQuiz() {
     }));
 
     // Start timer if the quiz has one
-    if (quiz.time_limit) {
-      timeLeft = quiz.time_limit * 60; // minutes → seconds
+        // Start timer if the quiz has one
+        // Start timer if the quiz has one
+       // Start timer if the quiz has one
+    if (quiz.time_limit && data.session.time_remaining !== null) {
+      timeLeft = data.session.time_remaining; 
       startTimer();
+    } else {
+      timeLeft = null;
+      document.getElementById('timer')?.remove();
     }
-
     renderQuestion();
 
   } catch (err) {
@@ -84,16 +101,25 @@ async function loadQuiz() {
 // TIMER
 // ─────────────────────────────────────────
 function startTimer() {
+  if (timerHandle) clearInterval(timerHandle); // Prevent double timers
   updateTimerDisplay();
+  
   timerHandle = setInterval(() => {
     timeLeft--;
     updateTimerDisplay();
+    
     if (timeLeft <= 0) {
       clearInterval(timerHandle);
       autoSubmit();
     }
   }, 1000);
 }
+
+// function autoSubmit() {
+//   // Instead of an alert (which pauses the JS), we show a quick message and submit
+//   document.body.innerHTML = '<div style="text-align:center; padding:50px;"><h2>⏱ Time is up!</h2><p>Submitting your answers...</p></div>';
+//   submitAnswers(true); // Pass true so it skips the "unanswered" warning
+// }
 
 function updateTimerDisplay() {
   const el = document.getElementById('timer');
@@ -105,8 +131,14 @@ function updateTimerDisplay() {
 }
 
 function autoSubmit() {
-  alert('Time is up! Submitting your answers.');
-  submitAnswers();
+  // 1. Show the alert popup
+  alert('⏱ Time is up! Your answers will now be automatically submitted.');
+  
+  // 2. Change the screen to show it's submitting
+  document.body.innerHTML = '<div style="text-align:center; padding:50px;"><h2>⏱ Time is up!</h2><p>Submitting your answers...</p></div>';
+  
+  // 3. Force submit
+  submitAnswers(true); 
 }
 
 // ─────────────────────────────────────────
@@ -176,23 +208,34 @@ function prevQuestion() {
 // ─────────────────────────────────────────
 // SUBMIT
 // ─────────────────────────────────────────
-async function submitAnswers() {
+async function submitAnswers(isAutoSubmit = false) {
   // Warn if any unanswered
-  const unanswered = answers.filter(a => {
-  if (a.question_type === 'multiple_choice') return a.selected_index === null;
-  if (a.question_type === 'text_input') return !a.text.trim();
-  if (a.question_type === 'two_step_choice') return a.selected_index === null || !a.selected_type;
-  if (a.question_type === 'sentence_construction') return !a.text.trim();
-  if (a.question_type === 'pattern_choice') return !a.text.trim() || !a.selected_pattern;
-  
-  
-  return true;
+    const unanswered = answers.filter((a, idx) => {
+    const q = questions[idx];
+
+    if (isPreview) {
+    // In preview mode, we don't send data to the backend. 
+    // We just simulate the result locally so the teacher can see the UI.
+    simulatePreviewResult();
+    return;}
+    
+    if (a.question_type === 'multiple_choice') return a.selected_index === null;
+    if (a.question_type === 'text_input') return !a.text.trim();
+    if (a.question_type === 'two_step_choice') return a.selected_index === null || !a.selected_type;
+    if (a.question_type === 'pattern_choice') return !a.text.trim() || !a.selected_pattern;
+    if (a.question_type === 'sentence_construction') {
+      // If it has subject_type, it's SVA (only needs text)
+      if (q.subject_type) return !a.text.trim();
+      // If it doesn't, it's Phrasal Verb (needs text AND phrasal_verb_answer)
+      return !a.text.trim() || !a.phrasal_verb_answer?.trim();
+    }
+    return true;
   }).length;
-  if (unanswered > 0) {
+   if (unanswered > 0 && !autoSubmit) {
     if (!confirm(`${unanswered} question(s) unanswered. Submit anyway?`)) return;
   }
 
-  if (timerHandle) clearInterval(timerHandle);
+ if (timerHandle) clearInterval(timerHandle);
 
   try {
     const res = await fetch(`/api/quizzes/${quizId}/submit`, {
@@ -201,17 +244,21 @@ async function submitAnswers() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ answers, session_id: sessionId,time_taken: Math.floor((Date.now() - startTime) / 1000)})
+      body: JSON.stringify({ 
+        answers, 
+        session_id: sessionId, 
+        time_taken: Math.floor((Date.now() - startTime) / 1000)
+      })
     });
 
-    if (!res.ok) {
+      if (!res.ok) {
       const err = await res.json();
       alert(err.error || 'Submit failed');
       return;
     }
 
         // If this is a pre-test, mark it as done and redirect to lesson
-    const urlParams = new URLSearchParams(window.location.search);
+    // const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('isPretest') === 'true') {
       // Extract lesson ID from referrer or save it in the URL (simplest is to pass it)
       // For now, let's just go back to the lessons list
@@ -265,6 +312,14 @@ function renderResults(result) {
 
         // Default layout for MCQ / text input
         if (!showTwoStep) {
+
+
+ const answersHtml = Object.entries(r.student_answers || {})
+
+    .map(([field, value]) =>
+      `<li><strong>${field}:</strong> ${escapeHtml(String(value))}</li>`
+    )
+    .join('');
           return `
             <div class="result-item ${r.is_correct ? 'correct' : 'wrong'}">
               <h4>Q${i + 1}: ${escapeHtml(r.question_text)}</h4>
@@ -297,20 +352,20 @@ function renderResults(result) {
             `;
           }
 
-          if (isPattern) {
-            return `
-              <div class="result-item ${r.is_correct ? 'correct' : 'wrong'}">
-                <h4>Q${i + 1}: ${escapeHtml(r.question_text || '')}</h4>
-                <p><strong>Your sentence:</strong> <em>${escapeHtml(r.student_text || '(none)')}</em></p>
-                <p>
-                  <strong>Pattern:</strong> ${escapeHtml(String(r.selected_pattern || '(none)'))}
-                  ${r.pattern_correct ? ' ✅' : ' ❌'}
-                </p>
-                ${!r.pattern_correct ? `<p><strong>Correct pattern:</strong> ${escapeHtml(String(r.correct_pattern))}</p>` : ''}
-                ${!r.is_correct && r.reason ? `<p style="color:#991b1b;"><strong>Why:</strong> ${escapeHtml(r.reason)}</p>` : ''}
-              </div>
-            `;
-          }
+                 if (isPattern) {
+          return `
+            <div class="result-item ${r.is_correct ? 'correct' : 'wrong'}">
+              <h4>Q${i + 1}: ${escapeHtml(r.question_text || '')}</h4>
+              <p><strong>Your sentence:</strong> <em>${escapeHtml(r.student_text || '(none)')}</em></p>
+              <p>
+                <strong>Pattern Selected:</strong> ${escapeHtml(String(r.selected_pattern || '(none)'))}
+                ${r.is_correct ? ' ✅' : ' ❌'}
+              </p>
+              ${r.reason ? `<p style="color:${r.is_correct ? '#166534' : '#991b1b'}; margin-top:8px;"><strong>Feedback:</strong> ${escapeHtml(r.reason)}</p>` : ''}
+              ${r.explanation ? `<p><em>${escapeHtml(r.explanation)}</em></p>` : ''}
+            </div>
+          `;
+        }
 
         // Two-step layout for clause
         return `
@@ -380,9 +435,53 @@ console.log(q);
       `).join('')}
     </ul>
   `;
-    } else if (q.question_type === 'text_input') {
-    // Check if this is an Irregular Verb question (has blank_fields)
+     } else if (q.question_type === 'text_input') {
     if (q.blank_fields) {
+      // ─── IRREGULAR VERB (PowerPoint Style) ───
+      const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
+      const answersObj = answers[currentIdx].data || {};
+
+      const renderInput = (label, field, value) => {
+        const isBlank = blanks.includes(field);
+        const studentValue = answersObj[field] || '';
+
+        return `
+          <div style="flex:1; text-align:center;">
+            <div style="font-size:14px; color:#333; margin-bottom:8px;">${label}</div>
+            ${isBlank 
+              ? `<input type="text" id="iv_${field}" value="${studentValue}" oninput="recordIrregularVerb('${field}', this.value)" style="width:100%; padding:12px; border:2px solid #999; border-radius:4px; text-align:center; font-size:16px;" placeholder="">`
+              : `<div style="padding:12px; border:2px solid #ccc; border-radius:4px; background:#f9f9f9; font-size:16px; color:#333;">${value}</div>`
+            }
+          </div>
+        `;
+      };
+
+      bodyHtml = `
+        <div style="background:#fff; padding:40px 20px; border:2px solid #333; border-radius:4px; margin: 20px 0;">
+          <h2 style="text-align:center; font-size:20px; margin-bottom:40px; text-transform:uppercase;">Activity # 1. Supplying Irregular Verbs.</h2>
+          
+          <div style="display:flex; align-items:center; justify-content:center; gap:16px;">
+            <div style="font-size:18px; font-weight:bold; color:#333;">Input ➡</div>
+            
+            ${renderInput('Present', 'present', q.present_form)}
+            ${renderInput('Past', 'past', q.past_form)}
+            ${renderInput('Future', 'future', q.future_form)}
+            ${renderInput('Past Participle', 'past_participle', q.past_participle)}
+
+            <button type="button" style="background:#a0a0a0; color:white; padding:10px 20px; border:none; border-radius:4px; font-weight:bold; opacity:0.6; cursor:not-allowed;">EDIT</button>
+          </div>
+        </div>
+      `;
+    } else {
+      // ─── STANDARD TEXT INPUT (SVA, Phrasal Verb) ───
+      bodyHtml = `
+        <input type="text" id="textAnswer" value="${answers[currentIdx].text || ''}" 
+               oninput="recordTextAnswer(this.value)" 
+               style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:16px;">
+      `;
+    }
+    if (q.blank_fields) {
+      // ─── IRREGULAR VERB (4 boxes) ───
       const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
       const answersObj = answers[currentIdx].data || {};
 
@@ -392,7 +491,7 @@ console.log(q);
           <div style="flex:1; text-align:center;">
             <div style="font-weight:bold; font-size:14px; margin-bottom:8px;">${label}</div>
             ${isBlank 
-              ? `<input type="text" id="iv_${field}" value="${value || ''}" oninput="recordIrregularVerb('${field}', this.value)" style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:6px; text-align:center;" placeholder="Fill in...">`
+              ? `<input type="text" id="iv_${field}" value="${answersObj[field] || ''}" oninput="recordIrregularVerb('${field}', this.value)" style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:6px; text-align:center;" placeholder="Fill in...">`
               : `<div style="padding:12px; background:#f1f5f9; border-radius:6px; border:1px solid #e2e8f0; color:#475569;">${value}</div>`
             }
           </div>
@@ -410,7 +509,7 @@ console.log(q);
         </div>
       `;
     } else {
-      // Standard text input
+      // ─── STANDARD TEXT INPUT (SVA, Phrasal Verb without target) ───
       bodyHtml = `
         <input type="text" id="textAnswer" value="${answers[currentIdx].text || ''}" 
                oninput="recordTextAnswer(this.value)" 
@@ -418,100 +517,6 @@ console.log(q);
       `;
     }
   
-    // Check if this is an Irregular Verb question (has blank_fields)
-    if (q.blank_fields) {
-      const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
-      const answersObj = answers[currentIdx].data || {};
-
-      const renderInput = (label, field, value) => {
-        const isBlank = blanks.includes(field);
-        return `
-          <div style="flex:1; text-align:center;">
-            <div style="font-weight:bold; font-size:14px; margin-bottom:8px;">${label}</div>
-            ${isBlank 
-              ? `<input type="text" id="iv_${field}" value="${value || ''}" oninput="recordIrregularVerb('${field}', this.value)" style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:6px; text-align:center;" placeholder="Fill in...">`
-              : `<div style="padding:12px; background:#f1f5f9; border-radius:6px; border:1px solid #e2e8f0; color:#475569;">${value}</div>`
-            }
-          </div>
-        `;
-      };
-
-      bodyHtml = `
-        <div style="background:#f8fafc; padding:24px; border-radius:8px; border:1px dashed #94a3b8; margin-bottom:24px;">
-          <div style="display:flex; gap:16px; align-items:flex-end;">
-            ${renderInput('Present', 'present', q.present_form)}
-            ${renderInput('Past', 'past', q.past_form)}
-            ${renderInput('Future', 'future', q.future_form)}
-            ${renderInput('Past Participle', 'past_participle', q.past_participle)}
-          </div>
-        </div>
-      `;
-    } else {
-      // Standard text input
-      bodyHtml = `
-        <input type="text" id="textAnswer" value="${answers[currentIdx].text || ''}" 
-               oninput="recordTextAnswer(this.value)" 
-               style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:16px;">
-      `;
-    }
-  
-    // Show the prompt (e.g., present form + ask_for)
-// to reqad th eblack field
-    if (q.blank_fields) {
-      const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
-      const answersObj = answers[currentIdx].data || {};
-
-      const renderInput = (label, field, value) => {
-        const isBlank = blanks.includes(field);
-        return `
-          <div style="flex:1; text-align:center;">
-            <div style="font-weight:bold; font-size:14px; margin-bottom:8px;">${label}</div>
-            ${isBlank 
-              ? `<input type="text" id="iv_${field}" value="${value || ''}" oninput="recordIrregularVerb('${field}', this.value)" style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:6px; text-align:center;" placeholder="Fill in...">`
-              : `<div style="padding:12px; background:#f1f5f9; border-radius:6px; border:1px solid #e2e8f0; color:#475569;">${value}</div>`
-            }
-          </div>
-        `;
-      };
-
-      bodyHtml = `
-        <div style="background:#f8fafc; padding:24px; border-radius:8px; border:1px dashed #94a3b8; margin-bottom:24px;">
-          <div style="display:flex; gap:16px; align-items:flex-end;">
-            ${renderInput('Present', 'present', q.present_form)}
-            ${renderInput('Past', 'past', q.past_form)}
-            ${renderInput('Future', 'future', q.future_form)}
-            ${renderInput('Past Participle', 'past_participle', q.past_participle)}
-          </div>
-        </div>
-      `;
-    } else {
-      // Standard text input (like SVA or Phrasal Verb)
-      bodyHtml = `
-        <input type="text" id="textAnswer" value="${answers[currentIdx].text || ''}" 
-               oninput="recordTextAnswer(this.value)" 
-               style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:16px;">
-      `;
-    }
-  
-    const promptHtml = q.present_form
-      ? `<div style="background:#f1f5f9; padding:16px; border-radius:8px; margin-bottom:20px;">
-           <div style="font-size:14px; color:#64748b; margin-bottom:6px;">Verb:</div>
-           <div style="font-size:24px; font-weight:700; color:#1e3a8a;">${escapeHtml(q.present_form)}</div>
-           <div style="font-size:13px; color:#64748b; margin-top:8px;">
-             Write the <strong>${formatAskFor(q.ask_for)}</strong> form.
-           </div>
-         </div>`
-      : '';
-
-    bodyHtml = `
-      ${promptHtml}
-      <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your answer:</label>
-      <input type="text" id="textAnswer"
-            value="${escapeHtml(currentAnswer.text || '')}"
-            placeholder="Type your answer..."
-            oninput="recordTextAnswer(this.value)"
-            style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:16px; outline:none;"
-            autocomplete="off" autofocus>`;
             
   } else if (q.question_type === 'two_step_choice') {
     const selectedIndex = answers[currentIdx].selected_index;
@@ -604,60 +609,53 @@ console.log(q);
       </select>
     `;
   
-    } else if (q.question_type === 'sentence_construction') {
-  const currentText = answers[currentIdx].text || '';
-  const currentVerbAnswer = answers[currentIdx].phrasal_verb_answer || '';
-  const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
+  } else if (q.question_type === 'sentence_construction') {
+    const currentText = answers[currentIdx].text || '';
+    const currentVerbAnswer = answers[currentIdx].phrasal_verb_answer || '';
+    const wordCount = currentText.trim() ? currentText.trim().split(/\s+/).length : 0;
 
-  // Show target verb if it's a phrasal verb question
-  const phrasalVerbHint = q.target_phrasal_verb ? `
-    <div style="background:#e0e7ff; padding:14px; border-radius:8px; margin-bottom:16px;">
-      <div style="font-size:13px; color:#3730a3; margin-bottom:4px;">Target phrasal verb:</div>
-      <div style="font-size:20px; font-weight:700; color:#1e3a8a;">"${escapeHtml(q.target_phrasal_verb)}"</div>
-    </div>
-  ` : '';
+    // Check if this is a Phrasal Verb question (no target_phrasal_verb is sent by the backend anymore)
+    // We can distinguish it from SVA because SVA sends subject_type, Phrasal Verb does not.
+    const isPhrasalVerb = !q.subject_type;
 
-  // Second input shows ONLY for phrasal verb questions
-  const secondInputHtml = q.target_phrasal_verb ? `
-    <label style="display:block; font-size:13px; color:#334155; margin:16px 0 8px; font-weight:600;">
-      Identify the phrasal verb in your sentence:
-    </label>
-    <input type="text" id="verbAnswer"
-           value="${escapeHtml(currentVerbAnswer)}"
-           placeholder="Type the phrasal verb..."
-           oninput="recordPhrasalVerb(this.value)"
-           style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px;"
-           autocomplete="off">
-  ` : '';
+    const secondInputHtml = isPhrasalVerb ? `
+      <label style="display:block; font-size:13px; color:#334155; margin:16px 0 8px; font-weight:600;">
+        Identify the phrasal verb in your sentence:
+      </label>
+      <input type="text" id="verbAnswer"
+             value="${escapeHtml(currentVerbAnswer)}"
+             placeholder="Type the phrasal verb..."
+             oninput="recordPhrasalVerb(this.value)"
+             style="width:100%; padding:12px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px;"
+             autocomplete="off">
+    ` : '';
 
-  bodyHtml = `
-    ${phrasalVerbHint}
-    ${q.context ? `<div style="background:#fef3c7; padding:14px; border-radius:8px; margin-bottom:16px; font-size:14px; color:#78350f;"><strong>Context:</strong> ${escapeHtml(q.context)}</div>` : ''}
+    bodyHtml = `
+      ${q.context ? `<div style="background:#fef3c7; padding:14px; border-radius:8px; margin-bottom:16px; font-size:14px; color:#78350f;"><strong>Context:</strong> ${escapeHtml(q.context)}</div>` : ''}
 
-    <div style="background:#f1f5f9; padding:14px; border-radius:8px; margin-bottom:16px;">
-      <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
-        ${q.subject_type ? `Target: <strong>${escapeHtml(q.subject_type)}</strong> subject, <strong>${escapeHtml(q.verb_type)}</strong> verb` : 'Write your sentence below'}
+      <div style="background:#f1f5f9; padding:14px; border-radius:8px; margin-bottom:16px;">
+        <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
+          ${q.subject_type ? `Target: <strong>${escapeHtml(q.subject_type)}</strong> subject, <strong>${escapeHtml(q.verb_type)}</strong> verb` : 'Write your sentence below'}
+        </div>
+        <div style="font-size:12px; color:#94a3b8;">
+          ${q.min_sentence_length}–${q.max_sentence_length} words
+        </div>
       </div>
-      <div style="font-size:12px; color:#94a3b8;">
-        ${q.min_sentence_length}–${q.max_sentence_length} words
+
+      <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your sentence:</label>
+      <textarea id="textAnswer" rows="4"
+                placeholder="Write your sentence here..."
+                oninput="recordTextAnswer(this.value); updateWordCount(this.value)"
+                style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px; outline:none; resize:vertical;"
+                autofocus>${escapeHtml(currentText)}</textarea>
+
+      <div style="text-align:right; font-size:12px; color:#64748b; margin-top:6px;" id="wordCountDisplay">
+        ${wordCount} word${wordCount !== 1 ? 's' : ''}
       </div>
-    </div>
 
-    <label style="display:block; font-size:13px; color:#334155; margin-bottom:8px; font-weight:600;">Your sentence:</label>
-    <textarea id="textAnswer" rows="4"
-              placeholder="Write your sentence here..."
-              oninput="recordTextAnswer(this.value); updateWordCount(this.value)"
-              style="width:100%; padding:14px; border:2px solid #cbd5e1; border-radius:8px; font-size:15px; outline:none; resize:vertical;"
-              autofocus>${escapeHtml(currentText)}</textarea>
-
-    <div style="text-align:right; font-size:12px; color:#64748b; margin-top:6px;" id="wordCountDisplay">
-      ${wordCount} word${wordCount !== 1 ? 's' : ''}
-    </div>
-
-    ${secondInputHtml}
-  `;
-}
-
+      ${secondInputHtml}
+    `;
+  }
 
   app.innerHTML = `
     <div class="quiz-header">
@@ -741,6 +739,24 @@ function recordPhrasalVerb(value) {
 function recordIrregularVerb(field, value) {
   if (!answers[currentIdx].data) answers[currentIdx].data = {};
   answers[currentIdx].data[field] = value;
+}
+
+function simulatePreviewResult() {
+  // Destroy timer if running
+  if (timerHandle) clearInterval(timerHandle);
+
+  // Show a fake result page so the teacher sees what it looks like
+  app.innerHTML = `
+    <div class="result-card">
+      <h1 style="color:#1e3a8a;">${escapeHtml(quiz.title)}</h1>
+      <div class="result-score pass" style="color:#16a34a; font-size:56px; font-weight:800; margin:16px 0;">100%</div>
+      <p style="color:#64748b;">(Preview Mode — No data was saved)</p>
+      
+      <div style="margin-top:32px; display:flex; gap:12px; justify-content:center;">
+        <a href="/teacher/quiz-editor.html?id=${quizId}" style="background:#1e3a8a; color:white; padding:10px 24px; border-radius:6px; text-decoration:none;">← Back to Editor</a>
+      </div>
+    </div>
+  `;
 }
 // ─────────────────────────────────────────
 // START

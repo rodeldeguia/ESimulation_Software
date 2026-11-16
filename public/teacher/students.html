@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Students Overview — SSEGL</title>
+  <link rel="stylesheet" href="/css/shared.css">
+  
+  <!-- Page-specific styles for the Grade Cards -->
+  <style>
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px; margin-top: 20px; }
+    .stat-card { background: white; border-radius: 12px; padding: 30px 24px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); cursor: pointer; transition: all 0.2s ease; border: 2px solid transparent; }
+    .stat-card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border-color: var(--gold); }
+    .stat-icon { font-size: 40px; margin-bottom: 12px; }
+    .stat-number { font-size: 42px; font-weight: 800; color: var(--navy); line-height: 1; margin-bottom: 4px; }
+    .stat-label { font-size: 16px; font-weight: 600; color: var(--text-muted); }
+    
+    .stat-card.all-levels { background: var(--navy); color: white; }
+    .stat-card.all-levels .stat-number { color: white; }
+    .stat-card.all-levels .stat-label { color: #cbd5e1; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div style="display: flex; align-items: center;">
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">☰</div>
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Teacher&background=1e3a8a&color=fff" alt="Teacher">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Teacher</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- LAYOUT -->
+  <div class="layout">
+    <!-- SIDEBAR (Teacher Links) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">Teacher Panel</div>
+      <div class="nav-links">
+        <a href="/teacher/dashboard.html">Dashboard</a>
+        <a href="/teacher/students.html" class="active">Students</a>
+        <a href="/teacher/lessons.html">Lessons</a>
+        <a href="/teacher/quizzes.html">Quizzes</a>
+        <a href="/teacher/progress.html">Progress</a>
+        <a href="/teacher/analytics.html">Analytics</a>
+        <a href="/teacher/dictionary.html">Grammar Dictionary</a>
+        <a href="/teacher/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <div class="page-header">
+        <h1>Students Overview</h1>
+      </div>
+
+      <!-- The Grade Cards -->
+      <div class="stats-grid" id="studentStats">
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">Loading student data...</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
+  <script src="/js/teacher-students.js"></script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Settings — SSEGL</title>
+  <link rel="stylesheet" href="/css/shared.css">
+  
+  <style>
+    /* Toggle Switch Styles */
+    .toggle-switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 26px; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: #16a34a; }
+    input:checked + .slider:before { transform: translateX(24px); }
+    
+    /* Form Layout */
+    .grid-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
+    .profile-upload { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; }
+    .profile-upload img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #eef2f5; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div style="display: flex; align-items: center;">
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">☰</div>
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Teacher&background=1e3a8a&color=fff" alt="Teacher">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Teacher</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- LAYOUT -->
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">Teacher Panel</div>
+      <div class="nav-links">
+        <a href="/teacher/dashboard.html">Dashboard</a>
+        <a href="/teacher/students.html">Students</a>
+        <a href="/teacher/lessons.html">Lessons</a>
+        <a href="/teacher/quizzes.html">Quizzes</a>
+        <a href="/teacher/progress.html">Progress</a>
+        <a href="/teacher/analytics.html">Analytics</a>
+        <a href="/teacher/dictionary.html">Grammar Dictionary</a>
+        <a href="/teacher/settings.html" class="active">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>Account Settings</h1>
+      </div>
+
+      <div class="grid-layout">
+        
+        <!-- LEFT: Profile Form -->
+        <div class="card">
+          <h2>My Profile</h2>
+          <form id="settingsForm" style="margin-top: 20px;">
+            
+            <div class="profile-upload">
+              <img id="previewPic" src="https://via.placeholder.com/80" alt="Profile">
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:bold; font-size: 14px; color: #555;">Profile Picture</label>
+                <input type="file" id="profilePic" accept="image/*" style="font-size: 13px; color: #555;">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="fullName" required>
+              </div>
+              <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" required>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Department</label>
+                <input type="text" id="department">
+              </div>
+              <div class="form-group">
+                <label>Specialization</label>
+                <input type="text" id="specialization">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Contact Number</label>
+                <input type="text" id="contactNumber">
+              </div>
+              <div class="form-group">
+                <label>New Password (leave blank to keep current)</label>
+                <input type="password" id="newPassword" placeholder="Enter new password">
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px; padding: 14px;">Save Changes</button>
+          </form>
+        </div>
+
+        <!-- RIGHT: Preferences -->
+        <div class="card">
+          <h2>Teaching Preferences</h2>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--border-color);">
+            <div>
+              <strong style="display: block; color: var(--navy); font-size: 14px;">Student Alerts</strong>
+              <span style="font-size: 12px; color: var(--text-muted);">Notify me when a student scores below 70%.</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--border-color);">
+            <div>
+              <strong style="display: block; color: var(--navy); font-size: 14px;">Weekly Reports</strong>
+              <span style="font-size: 12px; color: var(--text-muted);">Receive a summary of class progress every Monday.</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <h3 style="font-size: 15px; color: var(--navy); margin: 20px 0 10px;">Default Quiz Settings</h3>
+          
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label>Default Passing Score (%)</label>
+            <input type="number" value="70" min="1" max="100">
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label>Default Time Limit (Minutes)</label>
+            <input type="number" value="15" min="1">
+          </div>
+
+          <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="alert('Preferences saved!')">Save Preferences</button>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
+  <script src="/js/settings.js"></script>
+</body>
+</html>

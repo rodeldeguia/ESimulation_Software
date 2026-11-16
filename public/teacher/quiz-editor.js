@@ -203,8 +203,8 @@ function renderQuestionForm() {
       } else if (quiz.quiz_type === 'irregular_verb') {
     container.innerHTML = `
       <div class="form-group">
-        <label>Question Text (e.g. Fill in the missing forms of "go")</label>
-        <input type="text" id="q_text" required>
+        <label>Question Text (e.g. Fill in the missing forms )</label>
+        <input type="text" id="q_text"  value = "Fill in the missing tense forms" required >
       </div>
       ${common}
       
@@ -322,21 +322,14 @@ function renderQuestionForm() {
         <textarea id="q_context" placeholder="Think of one person or thing doing something."></textarea>
       </div>
     `;
-  } else if (quiz.quiz_type === 'phrasal_verb') {
+    } else if (quiz.quiz_type === 'phrasal_verb') {
     container.innerHTML = `
       <div class="form-group">
         <label>Instruction</label>
-        <input type="text" id="q_instruction" required placeholder="Write a sentence using the phrasal verb &quot;give up&quot;.">
+        <input type="text" id="q_instruction" required value="Write a sentence using any phrasal verb you have learned.">
       </div>
       ${common}
-      <div class="form-group">
-        <label>Target Phrasal Verb (the answer)</label>
-        <input type="text" id="q_target" required placeholder="give up">
-      </div>
-      <div class="form-group">
-        <label>Alternative Forms (comma-separated, optional)</label>
-        <input type="text" id="q_alternatives" placeholder="gave up, given up">
-      </div>
+      
       <div class="row">
         <div class="form-group">
           <label>Min Words</label>
@@ -347,29 +340,21 @@ function renderQuestionForm() {
           <input type="number" id="q_max" value="15" min="1" required>
         </div>
       </div>
+      
       <div class="form-group">
-        <label>Example Sentence</label>
-        <input type="text" id="q_example" required placeholder="She gave up smoking last year.">
+        <label>Example Sentence (Optional - for feedback)</label>
+        <input type="text" id="q_example" placeholder="e.g., She gave up smoking last year.">
       </div>
     `;
+  
     } else if (quiz.quiz_type === 'sentence_pattern') {
     container.innerHTML = `
       <div class="form-group">
         <label>Instruction</label>
-        <input type="text" id="q_instruction" required value="Write a sentence using the selected pattern.">
+        <input type="text" id="q_instruction" required value="Write a sentence and select its pattern.">
       </div>
       ${common}
       
-      <div class="form-group">
-        <label>Target Pattern (The correct answer)</label>
-        <select id="q_target_pattern" required>
-          <option value="S-V-O">S-V-O (Subject - Verb - Object)</option>
-          <option value="S-IV">S-IV (Subject - Intransitive Verb)</option>
-          <option value="S-LV-C">S-LV-C (Subject - Linking Verb - Complement)</option>
-          <option value="S-TV-O">S-TV-O (Subject - Transitive Verb - Object)</option>
-        </select>
-      </div>
-
       <div class="row">
         <div class="form-group">
           <label>Min Words</label>
@@ -492,7 +477,7 @@ function buildQuestionPayload() {
       max_sentence_length: parseInt(document.getElementById('q_max').value),
       example_sentence: document.getElementById('q_example').value.trim(),
       context: document.getElementById('q_context').value.trim() || null,
-      nlp_rules: {}   // Phase 11 already validates; no extra rules needed
+        // Phase 11 already validates; no extra rules needed
     };
   }
 
@@ -500,25 +485,22 @@ function buildQuestionPayload() {
     return {
       ...base,
       instruction: document.getElementById('q_instruction').value.trim(),
-      target_phrasal_verb: document.getElementById('q_target').value.trim(),
-      alternative_verbs: document.getElementById('q_alternatives').value
-        .split(',').map(s => s.trim()).filter(Boolean),
       min_sentence_length: parseInt(document.getElementById('q_min').value),
       max_sentence_length: parseInt(document.getElementById('q_max').value),
-      example_sentence: document.getElementById('q_example').value.trim(),
-      nlp_rules: {}
+      example_sentence: document.getElementById('q_example').value.trim() || null,
+    
     };
   }
-
+  
    if (quiz.quiz_type === 'sentence_pattern') {
     return {
       ...base,
-      instruction: document.getElementById('q_instruction').value.trim(),
-      target_pattern: document.getElementById('q_target_pattern').value,
-      allowed_patterns: ['S-V-O', 'S-IV', 'S-LV-C', 'S-TV-O'], // Always show all 4 to student
+       instruction: document.getElementById('q_instruction').value.trim(),
+      // NO target_pattern sent!
+      allowed_patterns: ['S-V-O', 'S-IV', 'S-LV-C', 'S-TV-O'],
       min_sentence_length: parseInt(document.getElementById('q_min').value),
       max_sentence_length: parseInt(document.getElementById('q_max').value),
-      nlp_rules: {}
+     
     };
   }
 
@@ -550,6 +532,16 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
     alert('Error publishing quiz');
   }
 });
+
+function previewQuiz() {
+  if (questions.length === 0) {
+    alert('Add at least one question before previewing.');
+    return;
+  }
+  
+  // Open the student quiz page in a new tab with a special ?preview=true flag
+  window.open(`/student/quiz.html?id=${quizId}&preview=true`, '_blank');
+}
 
 
 

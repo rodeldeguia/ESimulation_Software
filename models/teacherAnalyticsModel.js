@@ -69,6 +69,25 @@ module.exports = {
     const student = studentRows[0];
     const dashboard = await Analytics.getStudentDashboard(student_id, student.grade_level);
 
+     // ⬇️ NEW: Fetch all quiz sessions for this student to calculate history
+    const [sessions] = await pool.query(
+      `SELECT quiz_id, score, is_passed, started_at, time_taken 
+       FROM student_quiz_sessions 
+       WHERE student_id = ? AND completed_at IS NOT NULL
+       ORDER BY session_id ASC`,
+      [student_id]
+    );
+
+    // Group sessions by lesson (using the quizzes table to link quiz_id to lesson_id)
+    const [quizLessons] = await pool.query(`SELECT quiz_id, lesson_id FROM quizzes`);
+    const quizToLesson = {};
+    quizLessons.forEach(q => quizToLesson[q.quiz_id] = q.lesson_id);
+
+    const sessionsWithLesson = sessions.map(s => ({
+      ...s,
+      lesson_id: quizToLesson[s.quiz_id]
+    }));
+
     return {
       student: {
         student_id: student.student_id,
@@ -77,8 +96,88 @@ module.exports = {
         grade_level: student.grade_level,
         last_login: student.last_login
       },
-      ...dashboard
+      ...dashboard,
+      sessions: sessionsWithLesson
+    };
+  },
+
+
+    // ─── Class-Wide Analytics ───
+  async getClassAnalytics() {
+    // 1. Lesson Difficulty (Avg score per lesson)
+    const [lessonDifficulty] = await pool.query(`
+      SELECT l.title, AVG(s.score) as avg_score, COUNT(s.session_id) as total_attempts
+      FROM student_quiz_sessions s
+      JOIN quizzes q ON s.quiz_id = q.quiz_id
+      JOIN lessons l ON q.lesson_id = l.lesson_id
+      WHERE s.completed_at IS NOT NULL
+      GROUP BY l.lesson_id
+      ORDER BY avg_score ASC
+    `);
+
+    // 2. Student Leaderboard (Fastest + Best Scores)
+    const [leaderboard] = await pool.query(`
+      SELECT st.full_name, AVG(s.score) as avg_score, AVG(s.time_taken) as avg_time
+      FROM student_quiz_sessions s
+      JOIN students st ON s.student_id = st.student_id
+      WHERE s.completed_at IS NOT NULL
+      GROUP BY st.student_id
+      ORDER BY avg_score DESC, avg_time ASC
+      LIMIT 10
+    `);
+
+    // 3. Students Needing Help (Lowest scores)
+    const [struggling] = await pool.query(`
+      SELECT st.full_name, AVG(s.score) as avg_score, COUNT(s.session_id) as failed_attempts
+      FROM student_quiz_sessions s
+      JOIN students st ON s.student_id = st.student_id
+      WHERE s.is_passed = 0
+      GROUP BY st.student_id
+      ORDER BY avg_score ASC
+      LIMIT 5
+    `);
+// ⬇️ NEW #1: At-Risk Students (Failed > 2 times or Inactive > 7 days)
+    const [atRisk] = await pool.query(`
+      SELECT st.full_name, 
+             SUM(p.failed_attempts) as total_fails,
+             MAX(p.last_activity) as last_active
+      FROM student_lesson_progress p
+      JOIN students st ON p.student_id = st.student_id
+      GROUP BY st.student_id
+      HAVING total_fails > 2 OR last_active < DATE_SUB(NOW(), INTERVAL 7 DAY)
+      LIMIT 5
+    `);
+
+    // ⬇️ NEW #2: Quiz Type Weakness (Preposition, SVA, etc.)
+    const [quizTypeStats] = await pool.query(`
+      SELECT q.quiz_type, AVG(s.score) as avg_score
+      FROM student_quiz_sessions s
+      JOIN quizzes q ON s.quiz_id = q.quiz_id
+      WHERE s.completed_at IS NOT NULL
+      GROUP BY q.quiz_type
+    `);
+
+    // ⬇️ NEW #3: Lesson Drop-off Rate
+    const [dropOff] = await pool.query(`
+      SELECT l.title,
+             COUNT(DISTINCT p.student_id) as started_count,
+             COUNT(DISTINCT s.student_id) as completed_count
+      FROM student_lesson_progress p
+      JOIN lessons l ON p.lesson_id = l.lesson_id
+      LEFT JOIN student_quiz_sessions s ON s.student_id = p.student_id AND s.quiz_id IN (
+          SELECT quiz_id FROM quizzes WHERE lesson_id = l.lesson_id
+      )
+      GROUP BY l.lesson_id
+    `);
+
+    return {
+      lessonDifficulty,
+      leaderboard,
+      struggling,
+      atRisk,        // NEW
+      quizTypeStats, // NEW
+      dropOff        // NEW
     };
   }
-
 };
+

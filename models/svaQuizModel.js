@@ -8,7 +8,7 @@ module.exports = {
       `SELECT question_id, quiz_id, instruction, points, hint,
               subject_type, verb_type, context,
               min_sentence_length, max_sentence_length,
-              example_sentence, nlp_rules
+              example_sentence
        FROM sva_quiz
        WHERE quiz_id = ? AND is_active = 1
        ORDER BY RAND()`,
@@ -20,14 +20,14 @@ module.exports = {
   async create({ quiz_id, instruction, points, hint,
                  subject_type, verb_type, context,
                  min_sentence_length, max_sentence_length,
-                 example_sentence, nlp_rules, created_by }) {
+                 example_sentence,  created_by }) {
     const [result] = await pool.query(
       `INSERT INTO sva_quiz
        (quiz_id, instruction, points, hint,
         subject_type, verb_type, context,
         min_sentence_length, max_sentence_length,
-        example_sentence, nlp_rules, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        example_sentence, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         quiz_id,
         instruction,
@@ -39,7 +39,6 @@ module.exports = {
         min_sentence_length ?? 5,
         max_sentence_length ?? 50,
         example_sentence || null,
-        JSON.stringify(nlp_rules),
         created_by
       ]
     );

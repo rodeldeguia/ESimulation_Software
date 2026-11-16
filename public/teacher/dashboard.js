@@ -1,82 +1,88 @@
 // public/teacher/dashboard.js
-
 const token = localStorage.getItem('token');
 if (!token) window.location.href = '/auth/teacher-login.html';
 
 async function loadDashboard() {
   try {
-    // Overview stats
-    const statsRes = await fetch('/api/teacher-analytics/overview', {
+    // 1. Fetch Teacher Stats
+    const statsRes = await fetch('/api/teacher/stats', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (statsRes.status === 401) {
-      localStorage.clear(); window.location.href = '/auth/teacher-login.html'; return;
-    }
-    const stats = await statsRes.json();
+    
+    let stats = { total_students: 0, total_lessons: 0, total_quizzes: 0, pending_lessons: 0 };
+    if (statsRes.ok) stats = await statsRes.json();
 
-    document.getElementById('stats').innerHTML = `
-      <div class="stat"><div class="num">${stats.total_students}</div><div class="label">Students</div></div>
-      <div class="stat"><div class="num">${stats.total_lessons}</div><div class="label">Lessons</div></div>
-      <div class="stat"><div class="num">${stats.total_quizzes}</div><div class="label">Quizzes</div></div>
-      <div class="stat"><div class="num">${stats.total_attempts}</div><div class="label">Quiz Attempts</div></div>
+    // Render Stat Cards
+    document.getElementById('statsGrid').innerHTML = `
+      <div class="stat-card">
+        <h3>My Students</h3>
+        <div class="value">${stats.total_students || 0}</div>
+      </div>
+      <div class="stat-card">
+        <h3>My Lessons</h3>
+        <div class="value">${stats.total_lessons || 0}</div>
+      </div>
+      <div class="stat-card">
+        <h3>My Quizzes</h3>
+        <div class="value">${stats.total_quizzes || 0}</div>
+      </div>
+      <div class="stat-card">
+        <h3>Pending Approvals</h3>
+        <div class="value" style="color: #f59e0b;">${stats.pending_lessons || 0}</div>
+      </div>
     `;
 
-    // Student list
-    const studentsRes = await fetch('/api/teacher-analytics/students', {
+    // 2. Fetch Recent Activity
+    const activityRes = await fetch('/api/teacher/recent-activity', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    const students = await studentsRes.json();
 
-    if (students.length === 0) {
-      document.getElementById('studentsTable').innerHTML = '<p style="color:#64748b;">No students yet.</p>';
-      return;
+    const activityBody = document.getElementById('recentActivity');
+    let activities = [];
+    
+    if (activityRes.ok) activities = await activityRes.json();
+
+    if (activities.length === 0) {
+      activityBody.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted);">No recent activity.</div>`;
+    } else {
+      activityBody.innerHTML = activities.map(a => {
+        // Format the date nicely (e.g., "Nov 13, 2026, 2:25 PM")
+        const formattedDate = new Date(a.date).toLocaleString('en-US', {
+          month: 'short', day: 'numeric', year: 'numeric',
+          hour: 'numeric', minute: '2-digit', hour12: true
+        });
+        
+        // Color code the score
+        const scoreColor = parseFloat(a.score) >= 70 ? '#16a34a' : '#dc2626';
+
+        return `
+          <div class="list-item">
+            <div>
+              <div class="list-item-title">${a.student_name}</div>
+              <div class="list-item-meta">Completed: <strong>${a.lesson_title}</strong></div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-weight: 700; color: ${scoreColor}; font-size: 16px;">${a.score}%</div>
+              <div style="font-size: 12px; color: var(--text-muted);">${formattedDate}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
-
-    document.getElementById('studentsTable').innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Grade</th>
-            <th>Lessons Passed</th>
-            <th>Best Score</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${students.map(s => `
-            <tr>
-              <td>${escapeHtml(s.full_name)}</td>
-              <td>Grade ${s.grade_level}</td>
-              <td>${s.lessons_passed}</td>
-              <td>${s.best_score !== null ? s.best_score + '%' : '—'}</td>
-              <td class="${s.is_active ? 'status-active' : 'status-inactive'}">
-                ${s.is_active ? 'Active' : 'Inactive'}
-              </td>
-              <td><a href="/teacher/student.html?id=${s.student_id}">View</a></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
 
   } catch (err) {
-    console.error(err);
-    document.getElementById('studentsTable').textContent = 'Error loading dashboard.';
+    console.error("Dashboard Error:", err);
   }
 }
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+// Logout logic
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', (e) => {
+    e.preventDefault(); 
+    localStorage.clear(); 
+    window.location.href = '/auth/teacher-login.html';
+  });
 }
 
-document.getElementById('logoutBtn').addEventListener('click', (e) => {
-  e.preventDefault();
-  localStorage.clear();
-  window.location.href = '/auth/teacher-login.html';
-});
-
-loadDashboard();
+document.addEventListener('DOMContentLoaded', loadDashboard);

@@ -4,255 +4,328 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lesson Editor — SSEGL</title>
+  <link rel="stylesheet" href="/css/shared.css">
+  
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f0f0; }
+    /* Hide body scroll, only editor scrolls */
+    body { height: 100vh; overflow: hidden; }
+    .layout { height: calc(100vh - 70px); }
+        .main-content { 
+      display: flex; 
+      flex-direction: column; 
+      padding: 0; 
+      overflow: hidden; 
+      height: 100%; /* Ensure it fills the layout */
+    }
+    
 
-    /* Dark Header Bar */
-    .editor-header { background: #2c3e50; color: white; padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; }
-    .editor-header h1 { font-size: 24px; margin-bottom: 4px; }
-    .editor-header p { font-size: 13px; color: #b0bec5; }
-    .editor-header .back-link { color: #93c5fd; text-decoration: none; font-size: 14px; }
-    .editor-header .back-link:hover { text-decoration: underline; }
+    /* STICKY HEADER (Fixed at top) */
+    .sticky-header {
+      background: white;
+      padding: 20px 30px;
+      border-bottom: 1px solid var(--border-color);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      z-index: 10;
+      flex-shrink: 0;
+    }
+    
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .header-top h1 { font-size: 20px; color: var(--navy); margin: 0; }
+    
+    /* Collapsible Metadata */
+    .meta-panel {
+      background: #f8fafc;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+    .meta-panel.collapsed { display: none; }
+    
+    .meta-row { display: grid; grid-template-columns: 2fr 1.5fr; gap: 16px; margin-bottom: 12px; }
+    .meta-row:last-child { margin-bottom: 0; }
+    
+    .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-main); margin-bottom: 6px; }
+    .form-group input { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; outline: none; }
+    
+    /* Grade Checkboxes */
+    .grade-checkboxes { display: flex; gap: 12px; flex-wrap: wrap; }
+    .grade-checkboxes label { display: flex; align-items: center; gap: 6px; font-weight: normal; cursor: pointer; font-size: 14px; }
+    .grade-checkboxes input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary-blue); }
 
-    /* Main Container */
-    .editor-container { max-width: 1200px; margin: 30px auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; padding-bottom: 20px; }
-
-    /* Form Fields */
-    .form-header { padding: 24px 30px; background: #f8f9fa; border-bottom: 1px solid #dee2e6; }
-    .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 16px; }
-    .form-group { margin-bottom: 20px; padding: 0 30px; }
-    .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; font-size: 14px; }
-    .form-group input[type="text"], .form-group input[type="number"], .form-group select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 15px; outline: none; }
-    .form-group input:focus, .form-group select:focus { border-color: #4CAF50; }
-
-    /* Yellow Tip Bar */
-    .editor-toolbar-note { padding: 12px 30px; background: #fff8e1; border-bottom: 1px solid #ffe082; font-size: 13px; color: #6d4c00; }
-
-    /* Purple Quick Insert Panel */
-    .quick-insert-panel { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px 30px; margin: 20px 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .quick-insert-panel h4 { color: white; margin-bottom: 14px; font-size: 16px; }
-    .quick-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
-    .quick-btn { background: white; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; transition: transform 0.15s; }
+    /* Quick Insert Ribbon (Fixed) */
+    .quick-ribbon {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 12px 30px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .quick-btn { padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; }
     .quick-btn:hover { transform: translateY(-2px); }
-    .btn-blue-box { background: #2196F3; color: white; }
-    .btn-green-box { background: #4CAF50; color: white; }
-    .btn-yellow-box { background: #FF9800; color: white; }
-    .btn-purple-box { background: #764ba2; color: white; }
-    .btn-red-box { background: #f44336; color: white; }
 
-    /* Actions Bar */
-    .form-actions { padding: 20px 30px; background: #f8f9fa; border-top: 1px solid #dee2e6; display: flex; gap: 10px; justify-content: flex-end; }
-    .btn-save { background: #4CAF50; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 15px; font-weight: 600; }
-    .btn-save:hover { background: #45a049; }
-    .btn-save:disabled { background: #94a3b8; }
-    .btn-preview { background: #2196F3; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 15px; font-weight: 600; }
-    .btn-preview:hover { background: #1976D2; }
+    /* Editor Container (Scrollable) */
+   .editor-container {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 20px 30px;
+      background: #f1f5f9;
+      min-height: 0; /* ⬅️ THIS IS THE MAGIC FIX */
+    }
+   .editor-card { 
+      background: white; 
+      border-radius: 12px; 
+      padding: 0; 
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); 
+      border: 1px solid var(--border-color); 
+      max-width: 1000px; 
+      margin: 0 auto; 
+      width: 100%; 
+      height: 100%; 
+      overflow: hidden; 
+      display: flex; 
+      flex-direction: column; 
+    }
+       #lessonForm {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    
+      .tox-tinymce {
+      border: none !important;
+      border-radius: 0 0 12px 12px !important;
+      height: 100% !important;
+    }
+    /* Actions Bar (Fixed at bottom) */
+    .actions-bar {
+      background: white;
+      padding: 16px 30px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .modal { 
+  display: none; 
+  position: fixed; 
+  top: 0; left: 0; 
+  width: 100%; height: 100%; 
+  background: rgba(10,25,48,0.8); 
+  z-index: 999999; /* 🔥 INCREASED Z-INDEX */
+  justify-content: center; 
+  align-items: center; 
+  padding: 20px; 
+  overflow-y: auto; 
+}
+.modal-content {
+  background: white;
+  width: 100%;
+  max-width: 700px;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+  max-height: 80vh;
+  overflow-y: auto;
+}
 
-    /* Alerts */
-    .alert { padding: 14px 20px; margin: 20px 30px; border-radius: 5px; font-size: 14px; display: none; }
-    .alert.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; display: block; }
-    .alert.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; display: block; }
+    @media (max-width: 900px) {
+      .meta-row { grid-template-columns: 1fr; }
+      .actions-bar { flex-direction: column; gap: 12px; }
+    }
   </style>
 </head>
 <body>
 
-  <div class="editor-header">
-    <div>
-      <h1 id="pageTitle">Create New Grammar Topic</h1>
-      <p id="pageSubtitle">Create content like Microsoft Word - students will see exactly this formatting</p>
+  <!-- HEADER -->
+  <header class="header">
+    <div style="display: flex; align-items: center;">
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">☰</div>
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
     </div>
-    <a href="/teacher/lessons.html" class="back-link">← Back to Lessons</a>
-  </div>
-
-  <div class="editor-container">
-    <div id="alertBox" class="alert"></div>
-
-    <form id="lessonForm">
-      <div class="form-header">
-        <div class="form-row">
-          <div class="form-group" style="padding:0;">
-            <label for="title">Lesson Title *</label>
-            <input type="text" id="title" required placeholder="e.g., Present Perfect Tense...">
-          </div>
-          <!-- <div class="form-group" style="padding:0;">
-            <label for="lesson_order">Order *</label>
-            <input type="number" id="lesson_order" required min="1" value="1">
-          </div> -->
-          <div class="form-group" style="padding:0;">
-            <label for="grade_level">Grade Level *</label>
-            <select id="grade_level" required>
-              <option value="7">Grade 7</option>
-              <option value="8">Grade 8</option>
-              <option value="9">Grade 9</option>
-              <option value="10">Grade 10</option>
-            </select>
-          </div>
-
-        </div>
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Teacher&background=1e3a8a&color=fff" alt="Teacher">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Teacher</div>
       </div>
+    </div>
+  </header>
 
-      <div class="form-group" style="margin-top:20px;">
-        <label for="description">Short Description</label>
-        <input type="text" id="description" placeholder="A brief summary of what this lesson covers">
+  <!-- LAYOUT -->
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">Teacher Panel</div>
+      <div class="nav-links">
+        <a href="/teacher/dashboard.html">Dashboard</a>
+        <a href="/teacher/students.html">Students</a>
+        <a href="/teacher/lessons.html" class="active">Lessons</a>
+        <a href="/teacher/quizzes.html">Quizzes</a>
+        <a href="/teacher/progress.html">Progress</a>
+        <a href="/teacher/analytics.html">Analytics</a>
+        <a href="/teacher/dictionary.html">Grammar Dictionary</a>
+        <a href="/teacher/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
       </div>
+    </aside>
 
-      <div class="editor-toolbar-note">
-        💡 Tip: Use headings, lists, bold/italic text, and code blocks - everything will look the same for students!
-      </div>
-
-      <div class="quick-insert-panel">
-        <h4>🎨 Insert W3Schools-Style Colored Boxes</h4>
-        <div class="quick-buttons">
-          <!-- <button type="button" class="quick-btn" style="background:#8b5cf6; color:white; margin-left:auto;" onclick="openPreTestModal()">
-  🎯 Add Pre-Test
-</button> -->
-          <button type="button" class="quick-btn btn-blue-box" onclick="insertColoredBox('blue')">🔵 Blue Info Box</button>
-          <button type="button" class="quick-btn btn-green-box" onclick="insertColoredBox('green')">🟢 Green Tip Box</button>
-          <button type="button" class="quick-btn btn-yellow-box" onclick="insertColoredBox('yellow')">🟡 Warning Box</button>
-          <button type="button" class="quick-btn btn-purple-box" onclick="insertColoredBox('example')">📖 Grammar Example Box</button>
-          <button type="button" class="quick-btn btn-red-box" onclick="insertColoredBox('red')">🔴 Important Box</button>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>Content Editor (Write like Word)</label>
-        <textarea id="discussion_content" ></textarea>
-      </div>
-
-      <!-- PRE-TEST BUILDER -->
+    <main class="main-content">
       
-            <div class="form-actions" style="display:flex; justify-content:space-between; align-items:center;">
+      <!-- 1. STICKY HEADER (Title, Grade, Description) -->
+      <div class="sticky-header">
+        <div class="header-top">
+          <h1 id="pageTitle">Create New Lesson</h1>
+          <div style="display:flex; gap:10px;">
+            <button type="button" onclick="toggleMeta()" class="btn" style="background:#f1f5f9; padding:8px 16px; font-size:13px;">▼ Hide Details</button>
+            <a href="/teacher/lessons.html" class="btn" style="background:#f1f5f9; color:var(--text-main); text-decoration:none; padding:8px 16px; font-size:13px;">← Back</a>
+          </div>
+        </div>
+
+        <div class="meta-panel" id="metaPanel">
+          <div class="meta-row">
+            <div class="form-group">
+              <label>Lesson Title *</label>
+              <input type="text" id="title" required placeholder="e.g., Present Perfect Tense">
+            </div>
+            <div class="form-group">
+              <label>Grade Level(s) *</label>
+              <!-- MULTI-SELECT CHECKBOXES -->
+              <div class="grade-checkboxes" id="gradeCheckboxes">
+                <label><input type="checkbox" value="7"> Grade 7</label>
+                <label><input type="checkbox" value="8"> Grade 8</label>
+                <label><input type="checkbox" value="9"> Grade 9</label>
+                <label><input type="checkbox" value="10"> Grade 10</label>
+              </div>
+            </div>
+          </div>
+          <div class="meta-row">
+            <div class="form-group" style="grid-column: span 2;">
+              <label>Short Description</label>
+              <input type="text" id="description" placeholder="Brief summary of the lesson">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. FIXED RIBBON (Quick Insert) -->
+      <div class="quick-ribbon">
+        <button type="button" class="quick-btn" style="background:#2196F3; color:white;" onclick="insertColoredBox('blue')">🔵 Blue Box</button>
+        <button type="button" class="quick-btn" style="background:#4CAF50; color:white;" onclick="insertColoredBox('green')">🟢 Green Tip</button>
+        <button type="button" class="quick-btn" style="background:#FF9800; color:white;" onclick="insertColoredBox('yellow')">🟡 Warning</button>
+        <button type="button" class="quick-btn" style="background:#764ba2; color:white;" onclick="insertColoredBox('example')">📖 Example</button>
+        <button type="button" class="quick-btn" style="background:#f44336; color:white;" onclick="insertColoredBox('red')">🔴 Important</button>
+      </div>
+
+      <!-- 3. SCROLLABLE EDITOR -->
+      <div class="editor-container">
+        <div class="editor-card">
+          <div id="alertBox" class="alert"></div>
+          <form id="lessonForm">
+            <textarea id="discussion_content"></textarea>
+          </form>
+        </div>
+      </div>
+
+      <!-- 4. FIXED BOTTOM ACTIONS -->
+      <div class="actions-bar">
         <div style="display:flex; gap:10px; align-items:center;">
-          <button type="button" onclick="openPreTestModal()" style="background:#8b5cf6; color:white; padding:10px 20px; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">
+          <button type="button" onclick="openPreTestModal()" style="background:#8b5cf6; color:white; padding:10px 20px; border:none; border-radius:6px; cursor:pointer; font-weight:600;">
             🎯 Add / Edit Pre-Test
           </button>
-          <span id="preTestBadge" style="display:none; background:#dcfce7; color:#166534; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold;">
-            ✅ Pre-Test exists
-          </span>
-          <span id="finalQuizBadge" style="display:none; background:#fce7f3; color:#9d174d; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold;">
-            ✅ Final Quiz exists
-          </span>
+          <span id="preTestBadge" style="display:none; background:#dcfce7; color:#166534; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold;">✅ Pre-Test</span>
+          <span id="finalQuizBadge" style="display:none; background:#fce7f3; color:#9d174d; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold;">✅ Final Quiz</span>
         </div>
-        
         <div style="display:flex; gap:10px;">
-          <button type="button" class="btn-preview" onclick="previewLesson()">👁️ Preview</button>
-          <button type="submit" class="btn-save" id="saveBtn">💾 Save Topic</button>
+          <button type="button" onclick="previewLesson()" class="btn" style="background:#2196F3; color:white;">👁️ Preview</button>
+          <button type="submit" form="lessonForm" class="btn btn-primary" id="saveBtn" style="padding:12px 30px;">💾 Save Lesson</button>
         </div>
       </div>
 
-    </form>
+    </main>
   </div>
-    <!-- INSERT QUIZ MODAL -->
-  <div id="quizModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
-    <div style="background:white; width:600px; max-width:90%; border-radius:8px; padding:24px; max-height:90vh; overflow-y:auto;">
-      <h2 style="margin-bottom:16px; color:#1e3a8a;">Insert Quiz into Lesson</h2>
+
+  <!-- ========== PRE-TEST MODAL ========== -->
+  <div id="preTestModal" class="modal">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2>🎯 Pre-Test Builder</h2>
+        <button type="button" onclick="closePreTestModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted);">&times;</button>
+      </div>
       
-      <div class="form-group">
+      <p>Students must pass this test before they can read the lesson.</p>
+
+      <div id="modalPreTestList" style="margin-bottom: 20px; max-height: 200px; overflow-y: auto;"></div>
+
+      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+        <h4 style="margin-top:0; font-size:15px; margin-bottom:12px;">Add New Question</h4>
+        <input type="text" id="ptQuestion" placeholder="Question text (e.g. What is a verb?)" style="width:100%; margin-bottom:10px; padding:10px; border:1px solid var(--border-color); border-radius:4px;">
+        <input type="text" id="ptOptions" placeholder="Options separated by comma (e.g. A, B, C, D)" style="width:100%; margin-bottom:10px; padding:10px; border:1px solid var(--border-color); border-radius:4px;">
+        <input type="text" id="ptCorrect" placeholder="Correct answer (must match one option)" style="width:100%; margin-bottom:15px; padding:10px; border:1px solid var(--border-color); border-radius:4px;">
+        <button type="button" onclick="addPreTestQuestion()" class="btn" style="background:#e0e7ff; color:#3730a3;">+ Add Question to List</button>
+      </div>
+
+      <div style="margin-top:24px; text-align:right;">
+        <button type="button" onclick="closePreTestModal()" class="btn" style="background:#e2e8f0; color:var(--text-main); margin-right:8px;">Cancel</button>
+        <button type="button" onclick="previewPreTest()" class="btn" style="background:#2196F3; color:white; margin-right:8px;">👁️ Preview</button>
+        <button type="button" onclick="closePreTestModal()" class="btn" style="background:#8b5cf6; color:white;">Done</button>
+      </div>
+    </div>
+  </div>
+    <!-- ========== INLINE QUIZ MODAL ========== -->
+  <div id="quizModal" class="modal">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2>📝 Insert Inline Quiz</h2>
+        <button type="button" onclick="closeQuizModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted);">&times;</button>
+      </div>
+      
+      <p>Add an interactive multiple-choice question directly inside the lesson content.</p>
+
+      <div class="form-group" style="margin-bottom:16px;">
         <label>Quiz Type</label>
-        <select id="modalQuizType" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
-          <option value="preposition">(Multiple Choice)</option>
+        <select id="modalQuizType" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:4px;">
+          <option value="preposition">Preposition (Multiple Choice)</option>
           <option value="clause">Clause (Two-Step)</option>
-          <!-- Add other types here later if needed -->
         </select>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" style="margin-bottom:16px;">
         <label>Question Text</label>
-        <input type="text" id="modalQuestionText" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;" placeholder="e.g. She is good ___ math.">
+        <input type="text" id="modalQuestionText" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:4px;" placeholder="e.g. She is good ___ math.">
       </div>
 
-      <!-- Container for dynamic fields (differs per quiz type) -->
+      <!-- Dynamic fields will load here -->
       <div id="modalDynamicFields"></div>
 
       <div style="margin-top:24px; text-align:right;">
-        <button type="button" onclick="closeQuizModal()" style="padding:10px 20px; border:none; border-radius:4px; background:#ccc; cursor:pointer; margin-right:8px;">Cancel</button>
-        <button type="button" onclick="saveQuizToLesson()" id="modalSaveBtn" style="padding:10px 20px; border:none; border-radius:4px; background:#4CAF50; color:white; cursor:pointer;">Save & Insert</button>
+        <button type="button" onclick="closeQuizModal()" class="btn" style="background:#e2e8f0; color:var(--text-main); margin-right:8px;">Cancel</button>
+        <button type="button" onclick="saveQuizToLesson()" class="btn" style="background:#4CAF50; color:white;">Save & Insert</button>
       </div>
     </div>
   </div>
 
-  <!-- PRE-TEST MODAL -->
-  <!-- PRE-TEST MODAL -->
-  <!-- <div id="preTestModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
-    <div style="background:white; width:700px; max-width:90%; border-radius:8px; padding:30px; max-height:90vh; overflow-y:auto;">
-       -->
-      <!-- Header -->
-      <!-- <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <h2 style="color:#8b5cf6; margin:0;">🎯 Pre-Test Builder</h2>
-        <button type="button" onclick="closePreTestModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
-      </div>
-      
-      <p style="color:#64748b; font-size:14px; margin-bottom:20px;">Students must pass this test before they can read the lesson.</p> -->
-
-      <!-- List of questions -->
-      <!-- <div id="modalPreTestList" style="margin-bottom: 20px; max-height: 200px; overflow-y: auto;"> -->
-        <!-- JS inserts questions here -->
-      <!-- </div> -->
-
-      <!-- Add question form -->
-            <!-- <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;"> -->
-        <!-- <h4 style="margin-top:0; font-size:15px;">Add New Question</h4> -->
-        
-        <!-- <div class="form-group">
-          <label>Quiz Type</label>
-          <select id="fqType" onchange="renderFinalQuizFields()" style="width:100%; margin-bottom:10px; padding:10px; border:1px solid #cbd5e1; border-radius:4px;">
-            <option value="preposition">Preposition (Multiple Choice)</option>
-            <option value="clause">Clause (Two-step)</option>
-            <option value="irregular_verb">Irregular Verb</option>
-            <option value="sva">Subject-Verb Agreement (NLP)</option>
-          </select>
-        </div> -->
-
-        <!-- Dynamic fields will load here -->
-        <!-- <div id="fqDynamicFields"></div>
-
-        <button type="button" onclick="addFinalQuizQuestion()" style="background:#fce7f3; color:#9d174d; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">+ Add Question to List</button>
-      </div> -->
-      <!-- Footer buttons -->
-      <!-- <div style="margin-top:24px; text-align:right;">
-        <button type="button" onclick="closePreTestModal()" style="padding:10px 20px; border:none; border-radius:4px; background:#e2e8f0; cursor:pointer; margin-right:8px;">Cancel</button>
-        <button type="button" onclick="previewPreTest()" style="padding:10px 20px; border:none; border-radius:4px; background:#2196F3; color:white; cursor:pointer; margin-right:8px;">👁️ Preview</button>
-        <button type="button" onclick="closePreTestModal()" style="padding:10px 20px; border:none; border-radius:4px; background:#8b5cf6; color:white; cursor:pointer; font-weight:bold;">Done</button>
-      </div>
-    </div>
-  </div> -->
-
-  <!-- pre test modal end -->
-
-<!-- PRE-TEST MODAL --> 
- <div id="preTestModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
-  <div style="background:white; width:700px; max-width:90%; border-radius:8px; padding:30px; max-height:90vh; overflow-y:auto;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-      <h2 style="color:#8b5cf6; margin:0;">🎯 Pre-Test Builder</h2>
-      <button type="button" onclick="closePreTestModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
-    </div>
-    
-    <p style="color:#64748b; font-size:14px; margin-bottom:20px;">Students must pass this test before they can read the lesson.</p>
-
-    <div id="modalPreTestList" style="margin-bottom: 20px; max-height: 200px; overflow-y: auto;"></div>
-
-    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
-      <h4 style="margin-top:0; font-size:15px;">Add New Question</h4>
-      <input type="text" id="ptQuestion" placeholder="Question text (e.g. What is a verb?)" style="width:100%; margin-bottom:10px; padding:10px; border:1px solid #cbd5e1; border-radius:4px;">
-      <input type="text" id="ptOptions" placeholder="Options separated by comma (e.g. A, B, C, D)" style="width:100%; margin-bottom:10px; padding:10px; border:1px solid #cbd5e1; border-radius:4px;">
-      <input type="text" id="ptCorrect" placeholder="Correct answer (must match one option)" style="width:100%; margin-bottom:15px; padding:10px; border:1px solid #cbd5e1; border-radius:4px;">
-      <button type="button" onclick="addPreTestQuestion()" style="background:#e0e7ff; color:#3730a3; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">+ Add Question to List</button>
-    </div>
-
-        <div style="margin-top:24px; text-align:right;">
-      <button type="button" onclick="closePreTestModal()" style="padding:10px 20px; border:none; border-radius:4px; background:#e2e8f0; cursor:pointer; margin-right:8px;">Cancel</button>
-      <button type="button" onclick="previewPreTest()" style="padding:10px 20px; border:none; border-radius:4px; background:#2196F3; color:white; cursor:pointer; margin-right:8px;">👁️ Preview</button>
-      <button type="button" onclick="closePreTestModal()" style="padding:10px 20px; border:none; border-radius:4px; background:#8b5cf6; color:white; cursor:pointer; font-weight:bold;">Done</button>
-    </div>
-  </div>
-
-    <!-- FINAL QUIZ MODAL -->
-  
-</div>
-  <!-- Load TinyMCE FIRST -->
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
   <script src="/tinymce/tinymce.min.js"></script>
   <script src="/js/lesson-editor-init.js"></script>
   <script src="/teacher/lesson-editor.js"></script>
+  
+  <script>
+    // Toggle Metadata Panel (Collapse/Expand)
+    function toggleMeta() {
+      const panel = document.getElementById('metaPanel');
+      const btn = event.target;
+      panel.classList.toggle('collapsed');
+      btn.textContent = panel.classList.contains('collapsed') ? '▶ Show Details' : '▼ Hide Details';
+    }
+  </script>
 </body>
 </html>

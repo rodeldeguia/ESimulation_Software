@@ -1,113 +1,100 @@
 // utils/nlpService.js
 const winkNLP = require('wink-nlp');
 const model = require('wink-eng-lite-web-model');
+const pool = require('../config/db'); // Import DB to fetch dictionary
 
 const nlp = winkNLP(model);
 const its = nlp.its;
 
 // ═══════════════════════════════════════════════════════
+// DATABASE DICTIONARIES (Loaded on startup)
+// ═══════════════════════════════════════════════════════
+let VERBS_DICT = new Set();
+let COLLECTIVE_NOUNS = new Set();
+
+// Fetch from DB and populate the sets
+async function loadDictionaries() {
+  try {
+    const [verbs] = await pool.query('SELECT base_form FROM verbs_dictionary WHERE is_approved = 1');
+    verbs.forEach(v => VERBS_DICT.add(v.base_form.toLowerCase()));
+
+    const [nouns] = await pool.query('SELECT noun FROM collective_nouns_dictionary WHERE is_approved = 1');
+    nouns.forEach(n => COLLECTIVE_NOUNS.add(n.noun.toLowerCase()));
+
+    console.log(`✅ NLP Dictionary Loaded: ${VERBS_DICT.size} verbs, ${COLLECTIVE_NOUNS.size} collective nouns.`);
+  } catch (err) {
+    console.error('❌ Failed to load NLP dictionary:', err);
+  }
+}
+loadDictionaries(); // Run on startup
+
+// ═══════════════════════════════════════════════════════
 // VOCABULARY
 // ═══════════════════════════════════════════════════════
-
 const SINGULAR_PRONOUNS = new Set(['i', 'me', 'my', 'mine', 'myself', 'she', 'her', 'hers', 'herself', 'he', 'him', 'his', 'himself', 'it', 'its', 'itself']);
 const PLURAL_PRONOUNS = new Set(['we', 'us', 'our', 'ours', 'ourselves', 'they', 'them', 'their', 'theirs', 'themselves']);
-const AMBIGUOUS_PRONOUNS = new Set(['you', 'your', 'yours', 'yourself', 'yourselves']);  // can be singular or plural
-
-const COLLECTIVE_NOUNS = new Set(['team', 'family', 'class', 'group', 'committee', 'crowd', 'audience', 'staff', 'band', 'crew', 'public', 'government']);
-
-// Verbs that are always plural (base form, "I/you/they/we walk")
-const BASE_VERBS_EXCEPTIONS = new Set(['am', 'are', 'were', 'be', 'been', 'being']);
+const AMBIGUOUS_PRONOUNS = new Set(['you', 'your', 'yours', 'yourself', 'yourselves']);
+const DETERMINERS = ['the', 'a', 'an', 'my', 'your', 'his', 'her', 'our', 'their', 'this', 'that'];
 
 // ═══════════════════════════════════════════════════════
 // MORPHOLOGY HEURISTICS
 // ═══════════════════════════════════════════════════════
-
-// Does this verb look like 3rd-person singular? (walks, eats, runs)
 function verbLooksSingular(word) {
   const w = word.toLowerCase();
   if (w === 'is' || w === 'has' || w === 'does' || w === 'goes') return true;
-  if (w === 'am' || w === 'are' || w === 'were') return false;  // plural auxiliary
+  if (w === 'am' || w === 'are' || w === 'were') return false;
   if (w.endsWith('ss')) return false;
   if (w.endsWith('ies')) return true;
   if (w.endsWith('s') && w.length > 2) return true;
   return false;
 }
 
-// Does this verb look like base/plural form? (walk, eat, run)
-function verbLooksPlural(word) {
-  return !verbLooksSingular(word);
-}
-
-// Does this noun look plural? (dogs, students) — but avoid false positives
 function nounLooksPlural(word) {
   const w = word.toLowerCase();
-  if (COLLECTIVE_NOUNS.has(w)) return false;   // collective nouns take singular verbs
-  if (w.endsWith('ss')) return false;          // class, boss (singular)
-  if (w.endsWith('ies')) return true;          // studies → plural
-  if (w.endsWith('s') && w.length > 3) return true;   // dogs → plural
+  if (COLLECTIVE_NOUNS.has(w)) return false;
+  if (w.endsWith('ss')) return false;
+  if (w.endsWith('ies')) return true;
+  if (w.endsWith('s') && w.length > 3) return true;
   return false;
 }
 
-// ═══════════════════════════════════════════════════════
-// SVA VALIDATOR
-// ═══════════════════════════════════════════════════════
-
-// ─── Helper: does this word look like a verb? (morphological check) ───
 function looksLikeVerb(word) {
   const w = word.toLowerCase();
-  const commonVerbs = [
-    'run','walk','study','read','cook','play','work','eat','sleep','talk','sing','dance',
-    'swim','write','draw','paint','teach','learn','help','call','ask','answer','travel',
-    'fly','drive','clean','fix','build','make','think','know','see','hear','watch','look',
-    'give','take','bring','send','open','close','start','stop','love','like','want','need',
-    'have','do','go','come','live','stay','feel','seem','become','begin','end','try','use',
-    'find','lose','win','buy','sell','pay','cost','laugh','cry','smile','jump','climb',
-    'carry','push','pull','hold','throw','catch','meet','join','leave','enter','arrive'
-  ];
-  if (commonVerbs.includes(w)) return true;
+  
+  // Check DB Dictionary first
+  if (VERBS_DICT.has(w)) return true;
+  
+  // Fallback to morphology
   if (w.endsWith('s') && w.length > 2 && !w.endsWith('ss') && !w.endsWith('us') && !w.endsWith('is')) return true;
   if (w.endsWith('ed') && w.length > 3) return true;
   if (w.endsWith('ing') && w.length > 4) return true;
   return false;
 }
 
+// ═══════════════════════════════════════════════════════
+// SVA VALIDATOR
+// ═══════════════════════════════════════════════════════
 function validateSvaWithNlp(text, question) {
-  if (!text || !text.trim()) {
-    return { isCorrect: false, reason: 'Empty sentence' };
-  }
+  if (!text || !text.trim()) return { isCorrect: false, reason: 'Empty sentence' };
 
-  // 1. Word count
   const words = text.trim().split(/\s+/).filter(w => w.length > 0);
-  if (words.length < (question.min_sentence_length || 1)) {
-    return { isCorrect: false, reason: `Too short — need at least ${question.min_sentence_length} words` };
-  }
-  if (words.length > (question.max_sentence_length || 50)) {
-    return { isCorrect: false, reason: `Too long — max ${question.max_sentence_length} words` };
-  }
+  if (words.length < (question.min_sentence_length || 1)) return { isCorrect: false, reason: `Too short` };
+  if (words.length > (question.max_sentence_length || 50)) return { isCorrect: false, reason: `Too long` };
 
-  // 2. Parse with NLP
+  
   const doc = nlp.readDoc(text);
-  if (doc.sentences().out().length === 0) {
-    return { isCorrect: false, reason: 'Could not parse as a sentence' };
-  }
-
   const tokenList = [];
   doc.tokens().each((t) => {
     tokenList.push({ value: t.out(its.value), pos: t.out(its.pos) });
   });
 
-  // 3. Find main verb — NLP VERB → copula → morphological rescue
   let mainVerbIndex = -1;
   let mainVerb = null;
 
-  // 3a. NLP VERB tag
   for (let i = 0; i < tokenList.length; i++) {
-    if (tokenList[i].pos === 'VERB') {
-      mainVerbIndex = i; mainVerb = tokenList[i].value; break;
-    }
+    if (tokenList[i].pos === 'VERB') { mainVerbIndex = i; mainVerb = tokenList[i].value; break; }
   }
 
-  // 3b. Copula fallback
   if (mainVerbIndex === -1) {
     for (let i = 0; i < tokenList.length; i++) {
       if (['is', 'am', 'are', 'was', 'were'].includes(tokenList[i].value.toLowerCase())) {
@@ -116,48 +103,40 @@ function validateSvaWithNlp(text, question) {
     }
   }
 
-  // 3c. VERB RESCUE — morphological fallback when NLP fails
   if (mainVerbIndex === -1) {
-    for (let i = 2; i < tokenList.length; i++) {
-      const curWord = tokenList[i].value.toLowerCase();
+    for (let i = 1; i < tokenList.length; i++) {
       const prev = tokenList[i - 1];
-      const prevPrev = tokenList[i - 2];
-
-      // Skip articles/determiners/prepositions
-      if (['the','a','an','my','your','his','her','our','their','this','that','some','many',
-           'in','on','at','to','of','for','from','by','with','and','or','but'].includes(curWord)) continue;
-
-      // Need subject-like token before
-      const hasSubjectBefore = prev.pos === 'NOUN' || prev.pos === 'PRON' || prevPrev.pos === 'NOUN' || prevPrev.pos === 'PRON';
-
-      if (hasSubjectBefore && looksLikeVerb(curWord)) {
-        mainVerbIndex = i;
-        mainVerb = tokenList[i].value;
-        break;
+      const current = tokenList[i];
+      const curWord = current.value.toLowerCase();
+      if (DETERMINERS.includes(prev.value.toLowerCase())) continue;
+      if ((prev.pos === 'NOUN' || prev.pos === 'PRON') && current.pos !== 'DET') {
+        if (looksLikeVerb(curWord) || current.pos === 'NOUN') {
+          mainVerbIndex = i; mainVerb = curWord; break;
+        }
       }
     }
   }
 
-  if (mainVerbIndex === -1) {
-    return { isCorrect: false, reason: 'No verb found in the sentence' };
-  }
+  if (mainVerbIndex === -1) return { isCorrect: false, reason: 'No verb found in the sentence' };
 
-  // 4. Find subject BEFORE the verb
   let subject = null;
   let subjectType = null;
 
   for (let i = 0; i < mainVerbIndex; i++) {
     const w = tokenList[i].value.toLowerCase();
+    if (DETERMINERS.includes(w)) continue;
     if (SINGULAR_PRONOUNS.has(w)) { subject = w; subjectType = 'singular'; break; }
-    if (PLURAL_PRONOUNS.has(w))   { subject = w; subjectType = 'plural'; break; }
+    if (PLURAL_PRONOUNS.has(w)) { subject = w; subjectType = 'plural'; break; }
     if (AMBIGUOUS_PRONOUNS.has(w)) { subject = w; subjectType = 'ambiguous'; break; }
   }
 
   if (!subject) {
     for (let i = 0; i < mainVerbIndex; i++) {
-      if (tokenList[i].pos === 'NOUN') {
-        subject = tokenList[i].value.toLowerCase();
-        if (COLLECTIVE_NOUNS.has(subject)) subjectType = 'singular';
+      const w = tokenList[i].value.toLowerCase();
+      if (DETERMINERS.includes(w)) continue;
+      if (tokenList[i].pos === 'NOUN' || COLLECTIVE_NOUNS.has(w)) {
+        subject = w;
+        if (COLLECTIVE_NOUNS.has(subject)) subjectType = 'collective';
         else if (nounLooksPlural(subject)) subjectType = 'plural';
         else subjectType = 'singular';
         break;
@@ -165,95 +144,185 @@ function validateSvaWithNlp(text, question) {
     }
   }
 
-  if (!subject) {
-    return { isCorrect: false, reason: 'No subject found before the verb' };
-  }
+  if (!subject) return { isCorrect: false, reason: 'No subject found before the verb' };
 
-  // 5. Check expected subject type
   const expectedType = (question.subject_type || '').toLowerCase();
-  if (expectedType === 'singular' && subjectType === 'plural') {
-    return { isCorrect: false, reason: `Expected a singular subject, but "${subject}" is plural` };
-  }
-  if (expectedType === 'plural' && subjectType === 'singular') {
-    return { isCorrect: false, reason: `Expected a plural subject, but "${subject}" is singular` };
-  }
+  
+  if (expectedType === 'singular' && subjectType !== 'singular') return { isCorrect: false, reason: `Expected singular subject, but got "${subject}"` };
+  if (expectedType === 'plural' && subjectType !== 'plural') return { isCorrect: false, reason: `Expected plural subject, but got "${subject}"` };
   if (expectedType === 'collective') {
-    if (!COLLECTIVE_NOUNS.has(subject)) {
-      return { isCorrect: false, reason: `Expected a collective noun, but got "${subject}"` };
-    }
-    subjectType = 'singular';
+    if (!COLLECTIVE_NOUNS.has(subject)) return { isCorrect: false, reason: `Expected collective noun, but got "${subject}"` };
+    subjectType = 'collective';
   }
 
-  // 6. Agreement (I/you exempt)
-  if (subjectType === 'ambiguous' || subject.toLowerCase() === 'i') {
-    return { isCorrect: true };
-  }
+  if (subjectType === 'ambiguous' || subject.toLowerCase() === 'i') return { isCorrect: true };
 
   const verbIsSingular = verbLooksSingular(mainVerb);
-  if (subjectType === 'singular' && !verbIsSingular) {
-    return { isCorrect: false, reason: `Subject "${subject}" is singular, but verb "${mainVerb}" is plural` };
-  }
-  if (subjectType === 'plural' && verbIsSingular) {
-    return { isCorrect: false, reason: `Subject "${subject}" is plural, but verb "${mainVerb}" is singular` };
+
+  if (subjectType === 'singular' && !verbIsSingular) return { isCorrect: false, reason: `Subject "${subject}" is singular, but verb "${mainVerb}" is plural` };
+  if (subjectType === 'plural' && verbIsSingular) return { isCorrect: false, reason: `Subject "${subject}" is plural, but verb "${mainVerb}" is singular` };
+  
+  // Collective nouns can be tricky, but generally singular verbs are expected
+  if (subjectType === 'collective' && !verbIsSingular && question.verb_type === 'singular') {
+    return { isCorrect: false, reason: `Collective noun "${subject}" should take a singular verb` };
   }
 
   return { isCorrect: true };
 }
 
-// Common base verbs that can be ambiguous (noun vs verb)
-// function isLikelyBaseVerb(word) {
-//   // Common verbs that can be confused with nouns
-//   const commonVerbs = ['run', 'walk', 'study', 'read', 'cook', 'play', 'work', 'eat', 'sleep', 'talk', 'sing', 'dance', 'swim', 'write', 'draw', 'paint', 'teach', 'learn', 'help', 'call', 'ask', 'answer'];
-//   return commonVerbs.includes(word.toLowerCase());
-// }
-
 // ═══════════════════════════════════════════════════════
-// SENTENCE PATTERN VALIDATOR
+// SENTENCE PATTERN VALIDATOR (unchanged)
 // ═══════════════════════════════════════════════════════
-
 function validateSentencePatternWithNlp(text, selectedPattern) {
   if (!text || !text.trim()) return { isCorrect: false, reason: 'Empty sentence' };
   if (!selectedPattern) return { isCorrect: false, reason: 'No pattern selected' };
 
-  const doc = nlp.readDoc(text);
-  const tokens = doc.tokens();
+  const cleanText = text.trim();
+  const words = cleanText.toLowerCase().replace(/[.,!?;:]/g, '').split(/\s+/).filter(w => w.length > 0);
   
-  let hasSubject = false;
-  let hasVerb = false;
-  let hasObject = false;
-  let hasLinkingVerb = false;
-  let nounCount = 0;
+  if (words.length < 3) return { isCorrect: false, reason: 'Sentence is too short.' };
 
-  tokens.each((t) => {
-    const pos = t.out(its.pos);
-    const val = t.out(its.value).toLowerCase();
-    
-    if (pos === 'NOUN') nounCount++;
-    if (pos === 'PRON' || pos === 'NOUN') hasSubject = true;
-    if (pos === 'VERB') hasVerb = true;
-    if (['is', 'am', 'are', 'was', 'were', 'seem', 'become'].includes(val)) hasLinkingVerb = true;
+  // 1. Identify Linking Verbs (winkNLP often misses these)
+  const linkingVerbs = ['is', 'am', 'are', 'was', 'were', 'be', 'been', 'being', 'seem', 'seems', 'seemed', 'look', 'looks', 'looked', 'feel', 'feels', 'felt', 'taste', 'tastes', 'tasted', 'smell', 'smells', 'smelled', 'sound', 'sounds', 'sounded', 'become', 'becomes', 'became', 'grow', 'grows', 'grew', 'turn', 'turns', 'turned'];
+  
+  let hasLinkingVerb = false;
+  let linkingVerbIndex = -1;
+  
+  for (let i = 0; i < words.length; i++) {
+    if (linkingVerbs.includes(words[i])) {
+      hasLinkingVerb = true;
+      linkingVerbIndex = i;
+      break;
+    }
+  }
+
+  // 2. Use winkNLP to find the main verb (if not a linking verb)
+  let hasVerb = false;
+  let verbIndex = -1;
+  
+  const doc = nlp.readDoc(cleanText);
+  const tokens = [];
+  doc.tokens().each((t) => {
+    tokens.push({ word: t.out(its.value).toLowerCase(), pos: t.out(its.pos) });
   });
 
-  if (!hasSubject || !hasVerb) {
-    return { isCorrect: false, reason: 'Sentence must have a subject and a verb.' };
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].pos === 'VERB' || tokens[i].pos === 'AUX') {
+      hasVerb = true;
+      verbIndex = i;
+      break;
+    }
   }
 
-  const tag = selectedPattern.replace(/[-\s]/g, ''); // "S-V-O" -> "SVO"
+  // 3. Rescue: If no verb found by winkNLP, find the first word after the subject
+  if (!hasVerb && !hasLinkingVerb) {
+    for (let i = 1; i < words.length; i++) {
+      // If it's not a determiner, it might be the verb
+      if (!['the', 'a', 'an', 'my', 'your', 'his', 'her', 'our', 'their', 'this', 'that'].includes(words[i])) {
+        hasVerb = true;
+        verbIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (!hasVerb && !hasLinkingVerb) {
+    return { isCorrect: false, reason: 'Sentence must have a verb.' };
+  }
+
+  // 4. Find the subject (noun before the verb)
+  let hasSubject = false;
+  let subjectIndex = -1;
+  for (let i = 0; i < (verbIndex !== -1 ? verbIndex : linkingVerbIndex); i++) {
+    if (tokens[i] && (tokens[i].pos === 'NOUN' || tokens[i].pos === 'PRON')) {
+      hasSubject = true;
+      subjectIndex = i;
+      break;
+    }
+  }
+
+  if (!hasSubject) {
+    return { isCorrect: false, reason: 'Sentence must have a subject.' };
+  }
+
+  // 5. Count nouns after the verb
+  let nounAfterVerb = 0;
+  const startIdx = verbIndex !== -1 ? verbIndex : linkingVerbIndex;
+  for (let i = startIdx + 1; i < words.length; i++) {
+    // If the word is a noun, pronoun, or an adjective (for linking verbs), count it
+    const t = tokens[i];
+    if (t && (t.pos === 'NOUN' || t.pos === 'PRON' || t.pos === 'ADJ')) {
+      nounAfterVerb++;
+    } else if (!['the', 'a', 'an', 'to'].includes(words[i])) {
+      // If winkNLP failed, assume anything after the verb is a noun/adjective
+      nounAfterVerb++;
+    }
+  }
+
+  // 6. Determine actual pattern
+  let detectedPattern = 'Unknown';
+  
+  if (hasLinkingVerb) {
+    // Linking verbs are S-LV-C (Complement is required)
+    if (nounAfterVerb === 0) {
+      return { isCorrect: false, reason: 'S-LV-C requires a complement (adjective or noun) after the linking verb.' };
+    }
+    detectedPattern = 'S-LV-C';
+  } else if (nounAfterVerb > 0) {
+    // If there is a noun after the verb, it's S-V-O
+    detectedPattern = 'S-V-O';
+  } else {
+    // If there's no noun after the verb, it's intransitive (S-IV)
+    detectedPattern = 'S-IV';
+  }
+
+  // 7. Compare with student's choice
+  const tag = selectedPattern.replace(/[-\s]/g, '');
+  let isCorrect = false;
+  let reason = '';
 
   if (tag === 'SVO' || tag === 'STVO') {
-    if (nounCount < 2) return { isCorrect: false, reason: 'S-V-O requires an object (a second noun).' };
-    if (hasLinkingVerb) return { isCorrect: false, reason: 'You selected S-V-O, but the sentence has a linking verb (S-LV-C).' };
-  } else if (tag === 'SIV') {
-    if (nounCount > 1) return { isCorrect: false, reason: 'S-IV requires an intransitive verb (no object). Your sentence has an object.' };
-    if (hasLinkingVerb) return { isCorrect: false, reason: 'S-IV requires an action verb, not a linking verb.' };
-  } else if (tag === 'SLVC') {
-    if (!hasLinkingVerb) return { isCorrect: false, reason: 'S-LV-C requires a linking verb (is, are, seems, etc.).' };
+    if (detectedPattern === 'S-V-O') {
+      isCorrect = true;
+      reason = 'Correct! Your sentence has a Subject, Verb, and Object.';
+    } else if (detectedPattern === 'S-IV') {
+      isCorrect = false;
+      reason = 'S-V-O requires an object (a second noun). Your sentence has no object.';
+    } else if (detectedPattern === 'S-LV-C') {
+      isCorrect = false;
+      reason = 'You selected S-V-O, but the sentence has a linking verb (S-LV-C).';
+    }
+  } 
+  else if (tag === 'SIV') {
+    if (detectedPattern === 'S-IV') {
+      isCorrect = true;
+      reason = 'Correct! Your sentence has a Subject and an Intransitive Verb.';
+    } else if (detectedPattern === 'S-V-O') {
+      isCorrect = false;
+      reason = 'S-IV requires an intransitive verb (no object). Your sentence has an object.';
+    } else if (detectedPattern === 'S-LV-C') {
+      isCorrect = false;
+      reason = 'S-IV requires an action verb, not a linking verb.';
+    }
+  } 
+  else if (tag === 'SLVC') {
+    if (detectedPattern === 'S-LV-C') {
+      isCorrect = true;
+      reason = 'Correct! Your sentence has a Subject, Linking Verb, and Complement.';
+    } else if (detectedPattern === 'S-V-O') {
+      isCorrect = false;
+      reason = 'You selected S-LV-C, but your sentence has an action verb and an object (S-V-O).';
+    } else {
+      isCorrect = false;
+      reason = 'S-LV-C requires a linking verb (is, are, seems, etc.).';
+    }
   }
 
-  return { isCorrect: true, reason: 'Correct! Your sentence matches the pattern.' };
+  return { isCorrect, reason, detected_pattern: detectedPattern };
 }
 
 module.exports = {
   validateSvaWithNlp,
-  validateSentencePatternWithNlp
+  validateSentencePatternWithNlp,
+  loadDictionaries // Export so we can reload it if a new word is added
 };

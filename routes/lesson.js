@@ -11,5 +11,6 @@ router.get('/:id', lessonController.getOne);
 router.put('/:id', lessonController.update);
 router.get('/:id/quizzes', lessonController.getQuizzes);
 router.post('/', lessonController.create);
+router.delete('/:id', lessonController.deleteLesson);
 
 module.exports = router;
