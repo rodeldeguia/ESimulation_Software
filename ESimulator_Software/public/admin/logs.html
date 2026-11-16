@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activity Logs — SSEGL</title>
+  <!-- Link ONLY the shared CSS -->
+  <link rel="stylesheet" href="/css/shared.css">
+  
+  <!-- Small page-specific styles for the badges -->
+  <style>
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .badge-login { background: #e0e7ff; color: #3730a3; }
+    .badge-lesson { background: #dcfce7; color: #166534; }
+    .badge-quiz { background: #fef3c7; color: #92400e; }
+    .badge-user { background: #fee2e2; color: #991b1b; }
+    .badge-other { background: #f1f5f9; color: #475569; }
+    
+    /* Filter controls */
+    .filter-controls { display: flex; gap: 12px; flex-wrap: wrap; }
+    .filter-controls select { padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 14px; font-weight: 600; color: var(--navy); outline: none; }
+    .filter-controls button { padding: 10px 20px; background: white; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    
+    <!-- LEFT SIDE: Hamburger + Logo -->
+    <div style="display: flex; align-items: center;">
+      <!-- Hamburger -->
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">
+        ☰
+      </div>
+      <!-- Logo -->
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+
+    <!-- MIDDLE: Search -->
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+
+    <!-- RIGHT SIDE: Profile -->
+    <div class="header-user" >
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Admin&background=1e3a8a&color=fff" alt="Admin">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Administrator</div>
+      </div>
+    </div>
+
+  </header>
+
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id = "sidebar">
+      <div class="sidebar-header">Admin Panel</div>
+      <div class="nav-links">
+        <a href="/admin/dashboard.html">Dashboard</a>
+        <a href="/admin/teachers.html">Manage Teachers</a>
+        <a href="/admin/students.html">Manage Students</a>
+        <a href="/admin/approvals.html">Lesson Approvals</a>
+        <a href="/admin/dictionary.html">Grammar Dictionary</a>
+        <a href="/admin/logs.html" class="active">Activity Logs</a>
+        <a href="/admin/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <div class="page-header">
+        <h1>System Activity Logs</h1>
+        
+        <div class="filter-controls">
+          <!-- Action Filter -->
+          <select id="actionFilter" onchange="renderLogs()">
+            <option value="all">All Actions</option>
+            <option value="login">Logins</option>
+            <option value="lesson.create">Lesson Created</option>
+            <option value="lesson.approve">Lesson Approved</option>
+            <option value="lesson.reject">Lesson Rejected</option>
+            <option value="user.toggle_active">User Status Changes</option>
+          </select>
+          
+          <button onclick="loadLogs()">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Actor</th>
+              <th>Action</th>
+              <th>Target</th>
+              <th>IP Address</th>
+            </tr>
+          </thead>
+          <tbody id="logTableBody">
+            <tr><td colspan="5" style="text-align:center; padding:40px; color:#94a3b8;">Loading logs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
+  <script src="/js/admin-logs.js"></script>
+</body>
+</html>

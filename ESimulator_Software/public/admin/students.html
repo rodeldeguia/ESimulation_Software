@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Students — SSEGL</title>
+  <!-- ONLY the Unified CSS -->
+  <link rel="stylesheet" href="/css/shared.css">
+</head>
+<body>
+
+  <!-- HEADER -->
+ <header class="header">
+    
+    <!-- LEFT SIDE: Hamburger + Logo -->
+    <div style="display: flex; align-items: center;">
+      <!-- Hamburger -->
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">
+        ☰
+      </div>
+      <!-- Logo -->
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+
+    <!-- MIDDLE: Search -->
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+
+    <!-- RIGHT SIDE: Profile -->
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Admin&background=1e3a8a&color=fff" alt="Admin">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Administrator</div>
+      </div>
+    </div>
+
+  </header>
+
+  <!-- LAYOUT -->
+  <div class="layout">
+    
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id = "sidebar">
+      <div class="sidebar-header">Admin Panel</div>
+      <div class="nav-links">
+        <a href="/admin/dashboard.html">Dashboard</a>
+        <a href="/admin/teachers.html">Manage Teachers</a>
+        <a href="/admin/students.html" class="active">Manage Students</a>
+        <a href="/admin/approvals.html">Lesson Approvals</a>
+        <a href="/admin/dictionary.html">Grammar Dictionary</a>
+        <a href="/admin/logs.html">Activity Logs</a>
+        <a href="/admin/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <div class="page-header">
+        <h1>Manage Students</h1>
+      </div>
+
+      <!-- TABLE CONTAINER -->
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Grade</th>
+              <th>Lessons Passed</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="studentList">
+            <tr><td colspan="5" style="text-align:center; padding:20px;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+    
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
+  <script src="/admin/students.js"></script>
+</body>
+</html>

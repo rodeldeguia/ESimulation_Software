@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lesson Approvals — SSEGL</title>
+  <!-- ONLY link the shared CSS -->
+  <link rel="stylesheet" href="/css/shared.css">
+
+    <style>
+    .approval-card {
+      background: white; border-radius: 12px; padding: 20px; margin-bottom: 16px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid var(--border-color);
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;
+      transition: transform 0.2s;
+    }
+    .approval-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+    .approval-info h3 { color: var(--navy); font-size: 18px; margin-bottom: 8px; }
+    .approval-info p { color: var(--text-muted); font-size: 14px; margin-bottom: 4px; }
+    .approval-info .teacher { font-weight: 600; color: var(--text-main); }
+    
+    .empty-state { text-align: center; padding: 50px; background: white; border-radius: 12px; border: 1px solid var(--border-color); color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<header class="header">
+    
+    <!-- LEFT SIDE: Hamburger + Logo -->
+    <div style="display: flex; align-items: center;">
+      <!-- Hamburger -->
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">
+        ☰
+      </div>
+      <!-- Logo -->
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+
+    <!-- MIDDLE: Search -->
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+
+    <!-- RIGHT SIDE: Profile -->
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Admin&background=1e3a8a&color=fff" alt="Admin">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Administrator</div>
+      </div>
+    </div>
+
+  </header>
+
+  <div class="layout">
+    <!-- SIDEBAR (Using the wrapper classes from your CSS) -->
+    <aside class="sidebar" id = "sidebar">
+      <div class="sidebar-header">Admin Panel</div>
+      <div class="nav-links">
+        <a href="/admin/dashboard.html">Dashboard</a>
+        <a href="/admin/teachers.html">Manage Teachers</a>
+        <a href="/admin/students.html">Manage Students</a>
+        <a href="/admin/approvals.html" class="active">Lesson Approvals</a>
+        <a href="/admin/dictionary.html">Grammar Dictionary</a>
+        <a href="/admin/logs.html">Activity Logs</a>
+        <a href="/admin/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <div class="page-header">
+        <h1>Lesson Management</h1>
+        
+        <!-- Grade Filter -->
+        <select id="gradeFilter" onchange="renderLessons()" style="padding:10px; border-radius:8px; border:1px solid var(--border-color); font-size:14px; font-weight:600; color:var(--navy); outline:none;">
+          <option value="all">All Grades</option>
+          <option value="7">Grade 7</option>
+          <option value="8">Grade 8</option>
+          <option value="9">Grade 9</option>
+          <option value="10">Grade 10</option>
+        </select>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs" style="display:flex; gap:8px; margin-bottom:24px; border-bottom:2px solid var(--border-color); padding-bottom: 4px;">
+        <div class="tab active" id="tab-pending" onclick="switchTab('pending', this)" style="padding:12px 24px; font-size:15px; font-weight:600; color:var(--navy); cursor:pointer; border-bottom:3px solid var(--navy); margin-bottom:-2px;">Pending Approval</div>
+        <div class="tab" id="tab-approved" onclick="switchTab('approved', this)" style="padding:12px 24px; font-size:15px; font-weight:600; color:var(--text-muted); cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px;">Approved Lessons</div>
+      </div>
+
+      <div id="lessonsList">
+        <div class="empty-state">Loading lessons...</div>
+      </div>
+    </main>
+  </div>
+    
+  <!-- VIEW LESSON MODAL (Keep your custom styling for the lesson content here) -->
+  <div id="viewLessonModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(10,25,48,0.7); z-index:9999; justify-content:center; align-items:center; padding:20px; overflow-y:auto;">
+    <div style="background:white; width:900px; max-width:100%; border-radius:12px; padding:32px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1); max-height:90vh; overflow-y:auto;">
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; border-bottom:1px solid var(--border-color); padding-bottom:16px;">
+        <div>
+          <h2 style="color:var(--navy); margin:0; font-size:24px; font-weight:800;" id="modalLessonTitle">Loading...</h2>
+          <p style="color:var(--text-muted); font-size:14px; margin-top:4px;" id="modalLessonMeta"></p>
+        </div>
+        <button onclick="closeViewModal()" style="background:none; border:none; font-size:28px; cursor:pointer; color:var(--text-muted);">&times;</button>
+      </div>
+
+      <!-- The content wrapper -->
+      <div id="modalLessonContent" style="line-height: 1.6; color: var(--text-main); padding: 30px; background: white; border-radius: 8px; border: 1px solid var(--border-color);">
+        
+        <style>
+          #modalLessonContent h1 { color: #2c3e50; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; margin-top: 30px; }
+          #modalLessonContent h2 { color: #34495e; margin-top: 30px; border-left: 4px solid #4CAF50; padding-left: 15px; }
+          #modalLessonContent h3 { color: #555; margin-top: 25px; }
+
+          #modalLessonContent .info-box-blue { background: #e3f2fd; border-left: 6px solid #2196F3; padding: 20px; margin: 25px 0; border-radius: 8px; }
+          #modalLessonContent .info-box-blue h3 { color: #1976D2; margin-top: 0; }
+          #modalLessonContent .btn-blue { display: inline-block; background: #2196F3; color: white !important; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 10px; }
+
+          #modalLessonContent .tip-box-green { background: #e8f5e9; border-left: 6px solid #4CAF50; padding: 20px; margin: 25px 0; border-radius: 8px; }
+          #modalLessonContent .tip-box-green h3 { color: #2E7D32; margin-top: 0; }
+
+          #modalLessonContent .warning-box-yellow { background: #fff3e0; border-left: 6px solid #FF9800; padding: 20px; margin: 25px 0; border-radius: 8px; }
+          #modalLessonContent .warning-box-yellow h3 { color: #E65100; margin-top: 0; }
+
+          #modalLessonContent .important-box-red { background: #ffebee; border-left: 6px solid #f44336; padding: 20px; margin: 25px 0; border-radius: 8px; }
+          #modalLessonContent .important-box-red h3 { color: #c62828; margin-top: 0; }
+
+          #modalLessonContent .grammar-example { background: linear-gradient(135deg, #667eea 10%, #764ba2 100%); color: white; padding: 25px; margin: 25px 0; border-radius: 10px; }
+          #modalLessonContent .grammar-example h3 { color: white; margin-top: 0; border-bottom: 2px solid white; display: inline-block; padding-bottom: 5px; }
+          #modalLessonContent .grammar-example strong { color: #FFD700; }
+          #modalLessonContent .grammar-example .explanation { background: rgba(255,255,255,0.2); padding: 10px; border-radius: 5px; margin-top: 15px; font-style: italic; }
+
+          #modalLessonContent pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-left: 4px solid #4CAF50; border-radius: 5px; overflow-x: auto; }
+          #modalLessonContent code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+          #modalLessonContent pre code { background: transparent; color: inherit; }
+
+          #modalLessonContent table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+          #modalLessonContent th, #modalLessonContent td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          #modalLessonContent th { background: #4CAF50; color: white; }
+        </style>
+
+        <div id="content-render-target">Loading content...</div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px; border-top:1px solid var(--border-color); padding-top:20px;">
+        <button type="button" onclick="closeViewModal()" style="padding:10px 20px; border-radius:6px; font-weight:600; background:#f1f5f9; color:var(--text-main); border:none; cursor:pointer;">Close</button>
+        <button type="button" id="modalApproveBtn" style="padding:10px 20px; border-radius:6px; font-weight:600; background:#16a34a; color:white; border:none; cursor:pointer;">✓ Approve This Lesson</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/admin-approvals.js"></script>
+  <script src="/js/header-profile.js"></script>
+</body>
+</html>

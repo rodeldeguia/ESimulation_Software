@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Dashboard — SSEGL</title>
+  <link rel="stylesheet" href="/css/shared.css">
+  
+  <!-- Dashboard-specific styles (Same as Admin) -->
+  <style>
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 30px; }
+    .stat-card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid var(--border-color); }
+    .stat-card h3 { font-size: 13px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 10px; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 36px; font-weight: 800; color: var(--navy); line-height: 1; }
+    
+    .panel { background: white; border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .panel-header { padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
+    .panel-header h2 { font-size: 18px; color: var(--navy); margin: 0; font-weight: 700; }
+    .btn-view { background: var(--navy); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; transition: 0.2s; }
+    
+    .list-item { padding: 16px 24px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
+    .list-item:last-child { border-bottom: none; }
+    .list-item-title { font-weight: 600; color: var(--text-main); font-size: 15px; margin-bottom: 4px; }
+    .list-item-meta { font-size: 13px; color: var(--text-muted); }
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; background: #fef3c7; color: #92400e; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div style="display: flex; align-items: center;">
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">☰</div>
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Teacher&background=1e3a8a&color=fff" alt="Teacher">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Teacher</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- SIDEBAR (Teacher Links) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">Teacher Panel</div>
+      <div class="nav-links">
+        <a href="/teacher/dashboard.html" class="active">Dashboard</a>
+        <a href="/teacher/students.html">Students</a>
+        <a href="/teacher/lessons.html">Lessons</a>
+        <a href="/teacher/quizzes.html">Quizzes</a>
+        <a href="/teacher/progress.html">Progress</a>
+        <a href="/teacher/analytics.html">Analytics</a>
+        <a href="/teacher/dictionary.html">Grammar Dictionary</a>
+        <a href="/teacher/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <div class="page-header">
+        <h1>Overview</h1>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card"><h3>Loading...</h3></div>
+      </div>
+
+      <!-- Recent Submissions -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Recent Student Activity</h2>
+          <a href="/teacher/progress.html" class="btn-view">View All</a>
+        </div>
+        <div class="panel-body" id="recentActivity" style="padding: 0;">
+          Loading...
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
+  <script src="/teacher/dashboard.js"></script>
+</body>
+</html>

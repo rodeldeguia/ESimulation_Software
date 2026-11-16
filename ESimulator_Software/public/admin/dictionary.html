@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grammar Dictionary — SSEGL</title>
+  <link rel="stylesheet" href="/css/shared.css">
+  
+  <!-- Small page-specific styles for the dictionary tags -->
+  <style>
+    .word-container { display: flex; flex-wrap: wrap; gap: 8px; max-height: 300px; overflow-y: auto; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: #f8fafc; }
+    .word-tag { background: white; border: 1px solid var(--border-color); padding: 6px 14px; border-radius: 20px; font-size: 13px; color: var(--text-main); font-weight: 500; }
+    .alpha-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+    .alpha-btn { padding: 6px 10px; border: 1px solid var(--border-color); background: white; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .alpha-btn.active { background: var(--navy); color: white; border-color: var(--navy); }
+  </style>
+</head>
+<body>
+
+ <header class="header">
+    
+    <!-- LEFT SIDE: Hamburger + Logo -->
+    <div style="display: flex; align-items: center;">
+      <!-- Hamburger -->
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">
+        ☰
+      </div>
+      <!-- Logo -->
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+
+    <!-- MIDDLE: Search -->
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+
+    <!-- RIGHT SIDE: Profile -->
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Admin&background=1e3a8a&color=fff" alt="Admin">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Administrator</div>
+      </div>
+    </div>
+
+  </header>
+
+  <div class="layout">
+    <!-- SIDEBAR (With wrappers) -->
+    <aside class="sidebar" id = "sidebar">
+      <div class="sidebar-header">Admin Panel</div>
+      <div class="nav-links">
+        <a href="/admin/dashboard.html">Dashboard</a>
+        <a href="/admin/teachers.html">Manage Teachers</a>
+        <a href="/admin/students.html">Manage Students</a>
+        <a href="/admin/approvals.html">Lesson Approvals</a>
+        <a href="/admin/dictionary.html" class="active">Grammar Dictionary</a>
+        <a href="/admin/logs.html">Activity Logs</a>
+        <a href="/admin/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <div class="page-header">
+        <h1>Grammar Dictionary</h1>
+      </div>
+
+      <div class="grid-layout">
+        <!-- Left Card: Approved Words -->
+        <div class="card">
+          <h2>Approved Words</h2>
+          
+          <!-- Alphabet Filter (Required for JS) -->
+          <div class="alpha-container">
+            <button class="alpha-btn active" onclick="filterWords('all', this)">All</button>
+            <button class="alpha-btn" onclick="filterWords('A', this)">A</button>
+            <button class="alpha-btn" onclick="filterWords('B', this)">B</button>
+            <button class="alpha-btn" onclick="filterWords('C', this)">C</button>
+            <button class="alpha-btn" onclick="filterWords('D', this)">D</button>
+            <button class="alpha-btn" onclick="filterWords('E', this)">E</button>
+            <button class="alpha-btn" onclick="filterWords('F', this)">F</button>
+            <button class="alpha-btn" onclick="filterWords('G', this)">G</button>
+            <button class="alpha-btn" onclick="filterWords('H', this)">H</button>
+            <button class="alpha-btn" onclick="filterWords('I', this)">I</button>
+            <button class="alpha-btn" onclick="filterWords('J', this)">J</button>
+            <button class="alpha-btn" onclick="filterWords('K', this)">K</button>
+            <button class="alpha-btn" onclick="filterWords('L', this)">L</button>
+            <button class="alpha-btn" onclick="filterWords('M', this)">M</button>
+            <button class="alpha-btn" onclick="filterWords('N', this)">N</button>
+            <button class="alpha-btn" onclick="filterWords('O', this)">O</button>
+            <button class="alpha-btn" onclick="filterWords('P', this)">P</button>
+            <button class="alpha-btn" onclick="filterWords('Q', this)">Q</button>
+            <button class="alpha-btn" onclick="filterWords('R', this)">R</button>
+            <button class="alpha-btn" onclick="filterWords('S', this)">S</button>
+            <button class="alpha-btn" onclick="filterWords('T', this)">T</button>
+            <button class="alpha-btn" onclick="filterWords('U', this)">U</button>
+            <button class="alpha-btn" onclick="filterWords('V', this)">V</button>
+            <button class="alpha-btn" onclick="filterWords('W', this)">W</button>
+            <button class="alpha-btn" onclick="filterWords('X', this)">X</button>
+            <button class="alpha-btn" onclick="filterWords('Y', this)">Y</button>
+            <button class="alpha-btn" onclick="filterWords('Z', this)">Z</button>
+          </div>
+
+          <h3 style="font-size: 15px; margin-bottom: 8px;">Verbs (<span id="verbCount">0</span>)</h3>
+          <div class="word-container" id="verbList">Loading...</div>
+
+          <h3 style="font-size: 15px; margin: 20px 0 8px;">Collective Nouns (<span id="nounCount">0</span>)</h3>
+          <div class="word-container" id="nounList">Loading...</div>
+        </div>
+
+        <!-- Right Card: Pending Suggestions -->
+        <div class="card">
+          <h2>Pending Suggestions</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr><th>Word</th><th>Type</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="suggestionsTableBody">
+                <tr><td colspan="3" style="text-align:center; padding:20px;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
+  <script src="/js/admin-dictionary.js"></script>
+</body>
+</html>

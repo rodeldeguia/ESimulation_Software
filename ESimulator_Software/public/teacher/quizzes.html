@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Quizzes — SSEGL</title>
+  <link rel="stylesheet" href="/css/shared.css">
+  
+  <style>
+    .tabs { display: flex; gap: 8px; margin-bottom: 24px; overflow-x: auto; padding-bottom: 4px; border-bottom: 2px solid var(--border-color); }
+    .tab { padding: 12px 24px; font-size: 15px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; white-space: nowrap; transition: 0.2s; }
+    .tab.active { color: var(--navy); border-bottom-color: var(--navy); }
+    
+    .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .badge-pretest { background: #e0e7ff; color: #3730a3; }
+    .badge-final { background: #dcfce7; color: #166534; }
+    
+    .action-btn { background: none; border: none; cursor: pointer; font-size: 18px; margin-right: 12px; transition: transform 0.2s; text-decoration: none; }
+    .action-btn:hover { transform: scale(1.1); }
+    .empty-state { padding: 40px; text-align: center; color: var(--text-muted); }
+    
+    /* Preview Modal Styles */
+    .preview-question { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .preview-question h4 { color: var(--navy); margin-bottom: 12px; font-size: 16px; }
+    .preview-option { display: block; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px; font-size: 14px; cursor: not-allowed; }
+    .preview-option.correct { background: #dcfce7; border-color: #16a34a; color: #166534; font-weight: 600; }
+    .test-input { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div style="display: flex; align-items: center;">
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">☰</div>
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Teacher&background=1e3a8a&color=fff" alt="Teacher">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Teacher</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">Teacher Panel</div>
+      <div class="nav-links">
+        <a href="/teacher/dashboard.html">Dashboard</a>
+        <a href="/teacher/students.html">Students</a>
+        <a href="/teacher/lessons.html">Lessons</a>
+        <a href="/teacher/quizzes.html" class="active">Quizzes</a>
+        <a href="/teacher/progress.html">Progress</a>
+        <a href="/teacher/analytics.html">Analytics</a>
+        <a href="/teacher/dictionary.html">Grammar Dictionary</a>
+        <a href="/teacher/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>My Quizzes</h1>
+        <a href="/teacher/create-quiz.html" class="btn btn-primary">+ Create New Quiz</a>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" id="tab-final" onclick="filterQuizzes('final', this)">Final Quizzes</div>
+        <div class="tab" id="tab-pretest" onclick="filterQuizzes('pretest', this)">Pre-Tests</div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Quiz Title</th>
+              <th>Lesson</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="quizTableBody">
+            <tr><td colspan="6" class="empty-state">Loading quizzes...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+    <!-- ========== PREVIEW MODAL (Shows Correct Answers) ========== -->
+  <div id="previewModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(10,25,48,0.8); z-index:9999; justify-content:center; align-items:center; padding:20px; overflow-y:auto;">
+    <div style="background:white; width:800px; max-width:100%; border-radius:12px; padding:32px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1); max-height:90vh; overflow-y:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; border-bottom:1px solid var(--border-color); padding-bottom:16px;">
+        <div>
+          <h2 style="color:var(--navy); margin:0; font-size:24px; font-weight:800;" id="previewTitle">Loading...</h2>
+          <p style="color:var(--text-muted); font-size:14px; margin-top:4px;" id="previewMeta"></p>
+        </div>
+        <button onclick="closeModal('previewModal')" style="background:none; border:none; font-size:28px; cursor:pointer; color:var(--text-muted);">&times;</button>
+      </div>
+      <div id="previewContent">Loading questions...</div>
+      <div style="display:flex; justify-content:flex-end; margin-top:24px; border-top:1px solid var(--border-color); padding-top:20px;">
+        <button onclick="closeModal('previewModal')" class="btn" style="background:#f1f5f9; color:var(--text-main);">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== TEST MODAL (Interactive Student View) ========== -->
+  <div id="testModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(10,25,48,0.9); z-index:9999; justify-content:center; align-items:center; padding:20px; overflow-y:auto;">
+    <div style="background:white; width:800px; max-width:100%; border-radius:12px; padding:32px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1); max-height:90vh; overflow-y:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; border-bottom:1px solid var(--border-color); padding-bottom:16px;">
+        <div>
+          <h2 style="color:var(--navy); margin:0; font-size:24px; font-weight:800;" id="testTitle">Loading...</h2>
+          <p style="color:var(--text-muted); font-size:14px; margin-top:4px;">🧪 Test Mode (No data will be saved)</p>
+        </div>
+        <button onclick="closeModal('testModal')" style="background:none; border:none; font-size:28px; cursor:pointer; color:var(--text-muted);">&times;</button>
+      </div>
+      
+      <!-- Question container -->
+      <div id="testContent">Loading...</div>
+
+      <!-- Test Actions -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-top:1px solid var(--border-color); padding-top:20px;">
+        <button onclick="closeModal('testModal')" class="btn" style="background:#f1f5f9; color:var(--text-main);">Exit Test</button>
+        <button onclick="submitTestAnswers()" id="submitTestBtn" class="btn btn-primary" style="background:#16a34a;">Submit Answers (Check Result)</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
+  <script src="/js/teacher-quizzes.js"></script>
+</body>
+</html>
