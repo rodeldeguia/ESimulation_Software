@@ -144,4 +144,13 @@ async function downloadBackup() {
   }
 }
 
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', (e) => {
+    e.preventDefault(); 
+    localStorage.clear(); 
+    window.location.href = '/auth/teacher-login.html';
+  });
+}
+
 document.addEventListener('DOMContentLoaded', loadProfile);
