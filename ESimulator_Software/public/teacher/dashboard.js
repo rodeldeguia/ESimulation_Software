@@ -54,7 +54,7 @@ async function loadDashboard() {
         
         // Color code the score
         const scoreColor = parseFloat(a.score) >= 70 ? '#16a34a' : '#dc2626';
-
+// 
         return `
           <div class="list-item">
             <div>

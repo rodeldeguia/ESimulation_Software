@@ -4,100 +4,144 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Progress — SSEGL</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="/css/shared.css">
+  
   <style>
-    body { display: block; padding: 40px 20px; }
-    .container { max-width: 1000px; margin: 0 auto; }
-    .header { color: white; margin-bottom: 24px; }
-    .header h1 { font-size: 28px; }
-    .header a { color: #93c5fd; text-decoration: none; }
+    /* Page Layout */
+    .progress-layout { display: grid; grid-template-columns: 1fr 300px; gap: 30px; align-items: start; }
+    @media (max-width: 1000px) { .progress-layout { grid-template-columns: 1fr; } }
 
-    .summary {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px;
-      margin-bottom: 32px;
-    }
-    .stat-card {
-      background: white;
-      border-radius: 12px;
-      padding: 24px;
-      text-align: center;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-    }
-    .stat-card .number {
-      font-size: 36px;
-      font-weight: 800;
-      color: #1e3a8a;
-      line-height: 1;
-      margin-bottom: 8px;
-    }
-    .stat-card .label {
-      font-size: 13px;
-      color: #64748b;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
+    /* Summary Cards */
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 900px) { .summary { grid-template-columns: repeat(2, 1fr); } }
+    
+    .stat-card { background: white; border-radius: 8px; padding: 16px; border: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .stat-card .label { font-size: 13px; color: var(--text-main); font-weight: 700; margin-bottom: 4px; }
+    .stat-card .number { font-size: 24px; font-weight: 800; color: var(--navy); }
+    .stat-card.green .number { color: #16a34a; }
+    .stat-card.red .number { color: #dc2626; }
 
-    .lesson-list {
-      background: white;
-      border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    /* Lesson List */
+    .lesson-row { 
+      background: white; border-radius: 8px; padding: 16px 20px; margin-bottom: 12px; 
+      display: flex; justify-content: space-between; align-items: center;
+      border: 1px solid var(--border-color); transition: 0.2s;
     }
-    .lesson-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .lesson-item:last-child { border-bottom: none; }
+    .lesson-row.passed { border-left: 4px solid #16a34a; }
+    .lesson-row.locked { background: #f8fafc; border-left: 4px solid #cbd5e1; opacity: 0.8; }
+    
+    .lesson-title { display: flex; align-items: center; gap: 12px; font-weight: 700; color: var(--navy); font-size: 15px; }
+    .lesson-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; }
+    .icon-blue { background: #3b82f6; }
+    .icon-gray { background: #94a3b8; }
 
-    .lesson-info h3 { color: #0f172a; font-size: 16px; margin-bottom: 4px; }
-    .lesson-info p { color: #64748b; font-size: 13px; }
-
-    .lesson-meta {
-      text-align: right;
-      display: flex;
-      gap: 24px;
-      align-items: center;
-    }
-    .score {
-      font-size: 24px;
-      font-weight: 700;
-      min-width: 60px;
-    }
-    .score.pass { color: #16a34a; }
-    .score.fail { color: #dc2626; }
-    .score.none { color: #cbd5e1; }
-
-    .badge {
-      padding: 4px 10px;
-      border-radius: 100px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-    .badge.passed   { background: #dcfce7; color: #166534; }
-    .badge.failed   { background: #fee2e2; color: #991b1b; }
-    .badge.available{ background: #dbeafe; color: #1e40af; }
-    .badge.locked   { background: #f1f5f9; color: #64748b; }
-    .badge.reading_required { background: #fef3c7; color: #92400e; }
+    .lesson-meta { display: flex; align-items: center; gap: 24px; font-size: 14px; font-weight: 600; }
+    .meta-passed { color: #16a34a; display: flex; align-items: center; gap: 6px; }
+    .meta-locked { color: #64748b; display: flex; align-items: center; gap: 6px; font-weight: 500; }
+    .meta-score { color: var(--navy); }
+    .meta-time { color: var(--text-muted); font-weight: 500; }
+    .meta-unlock { color: #16a34a; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    
+    /* Right Sidebar (Chart) */
+    .chart-panel { background: white; border-radius: 12px; padding: 24px; border: 1px solid var(--border-color); text-align: center; margin-bottom: 24px; }
+    .chart-panel h3 { font-size: 16px; color: var(--navy); margin-bottom: 20px; font-weight: 700; }
+    .chart-container { position: relative; height: 180px; width: 100%; margin-bottom: 20px; }
+    
+    .chart-legend { display: flex; flex-direction: column; gap: 12px; text-align: left; }
+    .legend-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-muted); font-weight: 500; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-green { background: #16a34a; }
+    .dot-red { background: #ef4444; }
+    
+    .chart-center-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+    .chart-center-text .num { font-size: 28px; font-weight: 800; color: var(--navy); line-height: 1; }
+    .chart-center-text .lbl { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <div class="header">
-      <h1>My Progress</h1>
-      <a href="/student/dashboard.html">← Back to Dashboard</a>
+  <header class="header">
+    <div style="display: flex; align-items: center;">
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">☰</div>
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
     </div>
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Student&background=1e3a8a&color=fff" alt="Student">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;" id="navUserGrade">Grade --</div>
+      </div>
+    </div>
+  </header>
 
-    <div class="summary" id="summary"></div>
-    <div class="lesson-list" id="lessonList">Loading...</div>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">Student Panel</div>
+      <div class="nav-links">
+        <a href="/student/dashboard.html">Home</a>
+        <a href="/student/lessons.html">Lessons</a>
+        <a href="/student/final-quizzes.html">Final Quizzes</a>
+        <a href="/student/progress.html" class="active">Progress</a>
+                <a href="/student/settings.html" class="active">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>Progress</h1>
+      </div>
+
+      <div class="progress-layout">
+        <!-- LEFT COLUMN: Stats & Lessons -->
+        <div>
+          <!-- Stats -->
+          <div class="summary" id="summary">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Lessons List -->
+          <div id="lessonList">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Chart -->
+        <div>
+          <div class="chart-panel">
+            <h3>Quiz Performance</h3>
+            <div class="chart-container">
+              <canvas id="performanceChart"></canvas>
+              <div class="chart-center-text" id="chartCenterText">
+                <div class="num" id="chartCenterNum">0</div>
+                <div class="lbl">Correct</div>
+              </div>
+            </div>
+            
+            <div class="chart-legend">
+              <div class="legend-item">
+                <div class="legend-dot dot-green"></div>
+                <span id="legendCorrect">0 Correct Answers</span>
+              </div>
+              <div class="legend-item">
+                <div class="legend-dot dot-red"></div>
+                <span id="legendIncorrect">0 Incorrect Answers</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
   </div>
 
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
   <script src="/student/progress.js"></script>
 </body>
 </html>

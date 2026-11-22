@@ -181,32 +181,53 @@ function renderTestQuestion() {
     `;
   } 
   else if (type === 'irregular_verb') {
-    questionHTML = `
-      <h4 style="font-size:18px; color:var(--navy); margin-bottom:16px;">${q.question_text || 'Fill in the missing tenses'}</h4>
-      <div style="background:#f8fafc; padding:20px; border-radius:8px;">
-        <p style="margin-bottom:12px;">Base Verb: <strong>${q.present_form || 'Verb'}</strong></p>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-          <div><label style="font-size:12px; color:#666;">Present</label><input type="text" class="test-input" id="qPresent" value="${testAnswers[currentQuestionIndex]?.present || ''}" oninput="saveComplexAnswer('present', this.value)"></div>
-          <div><label style="font-size:12px; color:#666;">Past</label><input type="text" class="test-input" id="qPast" value="${testAnswers[currentQuestionIndex]?.past || ''}" oninput="saveComplexAnswer('past', this.value)"></div>
-          <div><label style="font-size:12px; color:#666;">Future</label><input type="text" class="test-input" id="qFuture" value="${testAnswers[currentQuestionIndex]?.future || ''}" oninput="saveComplexAnswer('future', this.value)"></div>
-          <div><label style="font-size:12px; color:#666;">Past Participle</label><input type="text" class="test-input" id="qParticiple" value="${testAnswers[currentQuestionIndex]?.past_participle || ''}" oninput="saveComplexAnswer('past_participle', this.value)"></div>
-        </div>
+  const blanks = Array.isArray(q.blank_fields) ? q.blank_fields : JSON.parse(q.blank_fields || '[]');
+  const answersObj = testAnswers[currentQuestionIndex] || {};
+
+  // Helper to render an input (editable) or a disabled display (read-only)
+  const renderInput = (label, field, value) => {
+    const isBlank = blanks.includes(field);
+    return `
+      <div>
+        <label style="font-size:12px; color:#666;">${label}</label>
+        ${isBlank 
+          ? `<input type="text" class="test-input" value="${answersObj[field] || ''}" oninput="saveComplexAnswer('${field}', this.value)" placeholder="Type answer...">`
+          : `<div style="padding:10px; background:#e2e8f0; border-radius:6px; font-size:14px; color:#64748b; cursor:not-allowed;">${value}</div>`
+        }
       </div>
     `;
-  }
-  else if (type === 'sva') {
+  };
+
+  questionHTML = `
+    <h4 style="font-size:18px; color:var(--navy); margin-bottom:16px;">${q.question_text || 'Fill in the missing tenses'}</h4>
+    <div style="background:#f8fafc; padding:20px; border-radius:8px;">
+      <p style="margin-bottom:12px; font-size:14px; color:#64748b;">Fill in only the blank fields. The provided fields are read-only.</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        ${renderInput('Present', 'present', q.present_form)}
+        ${renderInput('Past', 'past', q.past_form)}
+        ${renderInput('Future', 'future', q.future_form)}
+        ${renderInput('Past Participle', 'past_participle', q.past_participle)}
+      </div>
+    </div>
+  `;
+}
+   else if (type === 'sva') {
     questionHTML = `
       <h4 style="font-size:18px; color:var(--navy); margin-bottom:16px;">${q.instruction || q.question_text}</h4>
       <textarea class="test-input" rows="4" placeholder="Type your sentence here..." style="resize:vertical;" oninput="saveTestAnswer(this.value)">${testAnswers[currentQuestionIndex] || ''}</textarea>
+      <div id="testDuplicateError" style="display:none; color:#dc2626; font-size:13px; margin-top:8px; font-weight:600;"></div>
     `;
   }
+
   else if (type === 'phrasal_verb') {
     questionHTML = `
       <h4 style="font-size:18px; color:var(--navy); margin-bottom:16px;">${q.instruction || q.question_text}</h4>
       <p style="font-size:14px; margin-bottom:12px; color:var(--text-muted);">Target Phrasal Verb: <strong>${q.target_phrasal_verb || 'Not specified'}</strong></p>
       <textarea class="test-input" rows="4" placeholder="Type your sentence here..." style="resize:vertical; margin-bottom:12px;" oninput="saveTestAnswer(this.value)">${testAnswers[currentQuestionIndex] || ''}</textarea>
       <input type="text" class="test-input" placeholder="Type the exact phrasal verb you used" id="testPhrasalVerb" value="${testAnswers[currentQuestionIndex + '_verb'] || ''}" oninput="saveTestAnswer(this.value, '_verb')">
+      <div id="testDuplicateError" style="display:none; color:#dc2626; font-size:13px; margin-top:8px; font-weight:600;"></div>
     `;
+  
   }else if (type === 'clause') {
     questionHTML = `
       <h4 style="font-size:18px; color:var(--navy); margin-bottom:12px;">${q.question_text || 'Question'}</h4>
@@ -251,12 +272,12 @@ function renderTestQuestion() {
       </div>
     </div>
     ${questionHTML}
-    <div style="display:flex; justify-content:space-between; margin-top:24px;">
+       <div style="display:flex; justify-content:space-between; margin-top:24px;">
       <button class="btn" style="background:#f1f5f9;" onclick="prevTestQuestion()" ${currentQuestionIndex === 0 ? 'disabled' : ''}>← Previous</button>
       
       ${isLastQuestion 
-        ? `<button class="btn" style="background:#16a34a; color:white;" onclick="submitTestAnswers()">✅ Submit & Check</button>`
-        : `<button class="btn btn-primary" onclick="nextTestQuestion()">Next →</button>`
+        ? `<button id="testNextBtn" class="btn" style="background:#16a34a; color:white;" onclick="submitTestAnswers()">✅ Submit & Check</button>`
+        : `<button id="testNextBtn" class="btn btn-primary" onclick="nextTestQuestion()">Next →</button>`
       }
     </div>
   `;
@@ -264,6 +285,41 @@ function renderTestQuestion() {
 
 function saveTestAnswer(value, suffix = '') {
   testAnswers[currentQuestionIndex + suffix] = value;
+
+  // Only check duplicates for the main sentence (not the _verb or _pattern suffix)
+  if (suffix === '') {
+    const currentText = value.trim().toLowerCase();
+    const errorEl = document.getElementById('testDuplicateError');
+    const nextBtn = document.getElementById('testNextBtn');
+
+    if (currentText.length > 0) {
+      // Find if this exact sentence was used in a DIFFERENT question
+      let duplicateIdx = -1;
+      for (let i = 0; i < currentQuestions.length; i++) {
+        if (i !== currentQuestionIndex) {
+          const otherAnswer = testAnswers[i];
+          if (typeof otherAnswer === 'string' && otherAnswer.trim().toLowerCase() === currentText) {
+            duplicateIdx = i;
+            break;
+          }
+        }
+      }
+
+      if (duplicateIdx !== -1) {
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.textContent = `⚠️ You already used this exact sentence in Question ${duplicateIdx + 1}. Please write a different one.`;
+        }
+        if (nextBtn) nextBtn.disabled = true;
+      } else {
+        if (errorEl) errorEl.style.display = 'none';
+        if (nextBtn) nextBtn.disabled = false;
+      }
+    } else {
+      if (errorEl) errorEl.style.display = 'none';
+      if (nextBtn) nextBtn.disabled = false;
+    }
+  }
 }
 
 function saveComplexAnswer(field, value) {
@@ -274,6 +330,22 @@ function saveComplexAnswer(field, value) {
 }
 
 function nextTestQuestion() {
+  const currentText = testAnswers[currentQuestionIndex] ? testAnswers[currentQuestionIndex].trim().toLowerCase() : '';
+  
+  if (currentText.length > 0) {
+    let duplicateIdx = -1;
+    for (let i = 0; i < currentQuestions.length; i++) {
+      if (i !== currentQuestionIndex && typeof testAnswers[i] === 'string' && testAnswers[i].trim().toLowerCase() === currentText) {
+        duplicateIdx = i;
+        break;
+      }
+    }
+    if (duplicateIdx !== -1) {
+      alert(`You cannot continue. This sentence is already used in Question ${duplicateIdx + 1}. Please change it.`);
+      return; // Block navigation
+    }
+  }
+
   if (currentQuestionIndex < currentQuestions.length - 1) {
     currentQuestionIndex++;
     renderTestQuestion();
@@ -288,6 +360,19 @@ function prevTestQuestion() {
 }
 
 async function submitTestAnswers() {
+
+const textAnswers = Object.keys(testAnswers)
+    .filter(key => !key.includes('_'))
+    .map(key => testAnswers[key])
+    .filter(val => val && typeof val === 'string' && val.trim() !== '')
+    .map(val => val.trim().toLowerCase());
+
+  const uniqueAnswers = new Set(textAnswers);
+  if (uniqueAnswers.size !== textAnswers.length) {
+    alert("You cannot submit this test. You have used the same sentence for multiple questions.");
+    return;
+  }
+
   const quiz = allQuizzes.find(x => x.quiz_id === currentTestQuizId);
   if (!quiz) return;
 
@@ -343,6 +428,10 @@ async function submitTestAnswers() {
       if (quiz.quiz_type === 'preposition' || quiz.quiz_type === 'clause') {
         studentAnsStr = result.selected_answer || '(No answer)';
         correctAnsStr = result.correct_answer || 'Check question';
+          if (result.question_text) {
+                studentAnsStr = `Question: ${result.question_text}\nYour Answer: ${studentAnsStr}`;
+  }
+
       } 
       else if (quiz.quiz_type === 'irregular_verb') {
         studentAnsStr = JSON.stringify(result.student_answers);
@@ -350,11 +439,11 @@ async function submitTestAnswers() {
       }
       else if (quiz.quiz_type === 'sva') {
         studentAnsStr = result.student_text;
-        correctAnsStr = '';
+        correctAnsStr = result.instruction ? `Instruction: ${result.instruction}` : 'Valid sentence';
       }
-      else if (quiz.quiz_type === 'phrasal_verb') {
-        studentAnsStr = result.student_text;
-        correctAnsStr = `Must use: ${result.target_phrasal_verb}`;
+           else if (quiz.quiz_type === 'phrasal_verb') {
+        studentAnsStr = `${result.student_text} (Identified Verb: ${result.phrasal_verb_answer || 'none'})`;
+        correctAnsStr = result.detected_verb ? `NLP Detected: ${result.detected_verb}` : 'No phrasal verb detected';
       }
       else if (quiz.quiz_type === 'sentence_pattern') {
         studentAnsStr = `${result.student_text} (${result.selected_pattern})`;
@@ -370,7 +459,7 @@ async function submitTestAnswers() {
             <div style="margin-bottom:4px;"><strong>Your Answer:</strong> ${studentAnsStr}</div>
             
             <!-- Only show if correctAnsStr exists (for multiple choice/irregular verbs) -->
-            ${!isCorrect && correctAnsStr ? `<div style="margin-bottom:4px;"><strong>Correct Answer:</strong> ${correctAnsStr}</div>` : ''}
+            ${correctAnsStr ? `<div style="margin-bottom:4px;"><strong>Correct Answer:</strong> ${correctAnsStr}</div>` : ''}
             
             <!-- For SVA: Show the NLP Reason instead -->
             ${nlpReason ? `<div style="margin-top:8px; padding:8px; background:rgba(0,0,0,0.05); border-radius:4px; font-style:italic; font-size:13px; color:${isCorrect ? '#166534' : '#991b1b'};"><strong>System Evaluation:</strong> ${nlpReason}</div>` : ''}

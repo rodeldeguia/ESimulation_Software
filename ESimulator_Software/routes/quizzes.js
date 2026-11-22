@@ -10,6 +10,7 @@ router.get('/dictionary', quizController.getDictionary);
 router.post('/suggest-word', quizController.suggestWord);
 router.post('/check-inline', quizController.checkInlineAnswer);
 router.post('/embed', quizController.createEmbeddedQuiz);
+router.get('/final-list', auth, quizController.listFinalQuizzesForStudent);
 
 // Admin approvals (Specific)
 router.get('/suggestions', quizController.getSuggestions);
