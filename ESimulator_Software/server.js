@@ -25,7 +25,8 @@ const PORT = process.env.PORT;
 
 // Middleware
 app.use(logger)
-app.use(express.json()); // reading the incoming request as json
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' })); // reading the incoming request as json
 app.use(express.static('public'));
 // Serve TinyMCE from node_modules
 app.use('/tinymce', express.static(path.join(__dirname, 'node_modules', 'tinymce')));

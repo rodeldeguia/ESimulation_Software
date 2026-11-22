@@ -4,7 +4,7 @@ const token = localStorage.getItem('token');
 if (!token) window.location.href = '/auth/student-login.html';
 
 const params = new URLSearchParams(window.location.search);
-const lessonId = params.get('id');
+const lessonId = new URLSearchParams(window.location.search).get('id');
 
 const urlParams = new URLSearchParams(window.location.search);
 const isPreview = urlParams.get('preview') === 'true';
@@ -62,12 +62,20 @@ console.log(visibleQuizzes);
       if (preTest) {
         console.log("Pre-test found:", preTest);
         const hasTakenPreTest = localStorage.getItem(`pretest_done_${lessonId}`);
-        
-        if (!hasTakenPreTest) {
-          console.log("Redirecting to quiz ID:", preTest.quiz_id);
-          window.location.href = `/student/quiz.html?id=${preTest.quiz_id}&isPretest=true&lesson_id=${lessonId}`;
-          return; 
+
+            console.log("=== PRE-TEST CHECK ===");
+        console.log("Lesson ID:", lessonId);
+        console.log("Looking for key:", `pretest_done_${lessonId}`);
+        console.log("Value in localStorage:", hasTakenPreTest);
+
+       if (!hasTakenPreTest) {
+
+        console.log("Redirecting to quiz ID:", preTest.quiz_id);
+    window.location.href = `/student/quiz.html?id=${preTest.quiz_id}&isPretest=true&lesson_id=${lessonId}`;
+    return; 
         }
+      }else{
+        console.log("✅ ALREADY TAKEN. Loading lesson...");
       }
     }
 
@@ -134,6 +142,9 @@ console.log(visibleQuizzes);
       }
     } catch (e) { console.error('Failed to render final quizzes', e); }
 
+     await initReadingTracker();
+    setTimeout(checkIfAtBottom, 500); 
+
   } catch (err) {
     console.error('loadLesson error:', err);
     document.getElementById('lessonContent').textContent = 'Error loading lesson.';
@@ -168,4 +179,177 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// Mark reading complete when the student scrolls to the bottom
+
+// ═══════════════════════════════════════════════════════
+// Reading timer (accumulates active seconds only)
+// ═══════════════════════════════════════════════════════
+let readingSeconds = 0;         // seconds in this session
+let readingTimer = null;        // setInterval handle
+let readingCompleted = false;   // true once bottom reached
+let readingPaused = true;       // starts paused until first server ack
+
+function startReadingTimer() {
+  if (readingTimer || readingCompleted) return;
+  readingPaused = false;
+  readingTimer = setInterval(() => {
+    readingSeconds++;
+  }, 1000);
+}
+
+function pauseReadingTimer() {
+  if (readingTimer) {
+    clearInterval(readingTimer);
+    readingTimer = null;
+  }
+  readingPaused = true;
+}
+
+async function flushReadingProgress(keepalive = false) {
+  if (readingSeconds < 1) return;
+  const payload = JSON.stringify({ seconds: readingSeconds });
+  const url = `/api/lessons/${lessonId}/reading-pause`;
+  readingSeconds = 0; // reset immediately so we don't double-send
+
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: payload,
+      keepalive
+    });
+  } catch (e) {
+    console.warn('Failed to flush reading time:', e);
+  }
+}
+
+async function completeReading() {
+  if (readingCompleted) return;
+  readingCompleted = true;
+  pauseReadingTimer();
+
+  try {
+    await fetch(`/api/lessons/${lessonId}/reading-complete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ seconds: readingSeconds })
+    });
+    readingSeconds = 0;
+    console.log('Reading marked complete');
+  } catch (e) {
+    console.error('markReadingComplete failed:', e);
+  }
+}
+
+// ─── Initialize on lesson load ───
+async function initReadingTracker() {
+  try {
+    const res = await fetch(`/api/lessons/${lessonId}/reading-start`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      console.warn('Could not start reading session:', res.status);
+      return;
+    }
+    const data = await res.json();
+
+    if (data.reading_status === 'completed') {
+      readingCompleted = true;
+      return; // no timer needed
+    }
+
+    // Start the local timer
+    startReadingTimer();
+  } catch (e) {
+    console.error('initReadingTracker error:', e);
+  }
+}
+
+// ─── Pause when tab hidden ───
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    pauseReadingTimer();
+    flushReadingProgress(true);
+  } else if (!readingCompleted) {
+    startReadingTimer();
+  }
+});
+
+// ─── Pause & flush when leaving page ───
+window.addEventListener('pagehide', () => {
+  pauseReadingTimer();
+  // sendBeacon survives page unload — use it for last flush
+  if (readingSeconds > 0) {
+    const url = `/api/lessons/${lessonId}/reading-pause`;
+    const blob = new Blob(
+      [JSON.stringify({ seconds: readingSeconds })],
+      { type: 'application/json' }
+    );
+    // Note: sendBeacon can't set Authorization header, so we use fetch with keepalive instead
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ seconds: readingSeconds }),
+      keepalive: true
+    });
+    readingSeconds = 0;
+  }
+});
+
+// ─── Detect bottom of page ───
+function checkIfAtBottom() {
+  if (readingCompleted) return;
+  if (readingSeconds < 5) return;
+
+  const scrollTop = window.scrollY || document.documentElement.scrollTop;
+  const scrollHeight = document.documentElement.scrollHeight;
+  const clientHeight = window.innerHeight;
+  const totalScrollable = scrollHeight - clientHeight;
+
+  const isLongPage = totalScrollable > 200;
+  // Within 150px of the bottom OR scrolled 90% of the way down
+  const nearBottom = scrollTop + clientHeight >= scrollHeight - 150;
+  const scrolledMost = scrollTop >= totalScrollable * 0.90;
+
+  if (isLongPage && (nearBottom || scrolledMost)) {
+    completeReading();
+  } else if (!isLongPage && readingSeconds >= 15) {
+    completeReading();
+  }
+}
+
+
+
+setInterval(() => {
+  if (!readingPaused && readingSeconds >= 30 && !readingCompleted) {
+    flushReadingProgress(false);
+    checkIfAtBottom();  // ← also re-check scroll
+  }
+}, 30000);
+
+setInterval(() => {
+  if (!readingCompleted && readingSeconds >= 10) {
+    checkIfAtBottom();
+  }
+}, 5000);
+
 loadLesson();
+
+window.addEventListener('scroll', checkIfAtBottom, { passive: true });
+// Also fire on load in case the lesson is very short (fits on one screen)
+window.addEventListener('load', checkIfAtBottom);
+
+// Flush accumulated seconds every 30s while actively reading
+
+
+

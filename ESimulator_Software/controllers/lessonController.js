@@ -55,6 +55,21 @@ exports.list = async (req, res) => {
       for (const lesson of lessons) {
         const unlocked = await Progress.isPrerequisitePassed(req.user.id, lesson.prerequisite_lesson_id);
         lesson.locked = !unlocked;
+
+
+        const [progressRows] = await pool.query(
+    `SELECT lesson_status, best_quiz_score
+     FROM student_lesson_progress
+     WHERE student_id = ? AND lesson_id = ?`,
+    [req.user.id, lesson.lesson_id]
+  );
+  const p = progressRows[0] || {};
+  lesson.status = p.lesson_status || 'locked';
+  lesson.best_score = p.best_quiz_score !== undefined && p.best_quiz_score !== null
+    ? Number(p.best_quiz_score)
+    : null;
+
+
       }
     } else {
       lessons = await Lesson.findAll();
@@ -88,6 +103,14 @@ exports.getOne = async (req, res) => {
         student_id: req.user.id, lesson_id: lesson.lesson_id,
         initial_status: 'reading_required', final_available: true
       });
+
+      await pool.query(
+  `UPDATE student_lesson_progress
+   SET reading_status = 'in_progress',
+       reading_started_at = COALESCE(reading_started_at, NOW())
+   WHERE student_id = ? AND lesson_id = ? AND reading_status = 'not_started'`,
+  [req.user.id, lesson.lesson_id]
+);
     }
 
     // 1. Fetch embedded quizzes
@@ -326,6 +349,155 @@ exports.deleteLesson = async (req, res) => {
     res.json({ message: 'Lesson deleted successfully' });
   } catch (err) {
     console.error('deleteLesson error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// exports.markReadingComplete = async (req, res) => {
+//   try {
+//     if (req.user.role !== 'student') {
+//       return res.status(403).json({ error: 'Student access only' });
+//     }
+//     const lessonId = req.params.id;
+//     const studentId = req.user.id;
+//     const extraSeconds = Math.max(0, Math.min(3600, Number(req.body.seconds) || 0));
+
+//     const [rows] = await pool.query(
+//       `SELECT reading_status FROM student_lesson_progress
+//        WHERE student_id = ? AND lesson_id = ?`,
+//       [studentId, lessonId]
+//     );
+
+//     if (rows.length === 0) {
+//       return res.status(404).json({ error: 'Progress row not found' });
+//     }
+
+//     if (rows[0].reading_status === 'completed') {
+//       return res.json({ success: true, already_completed: true });
+//     }
+
+//     await pool.query(
+//       `UPDATE student_lesson_progress
+//        SET reading_status = 'completed',
+//            reading_completed_at = NOW(),
+//            reading_time_spent = reading_time_spent + ?,
+//            reading_progress = 100.00,
+//            last_activity = NOW()
+//        WHERE student_id = ? AND lesson_id = ?`,
+//       [extraSeconds, studentId, lessonId]
+//     );
+
+//     res.json({ success: true, seconds_added: extraSeconds });
+//   } catch (err) {
+//     console.error('markReadingComplete error:', err);
+//     res.status(500).json({ error: 'Server error' });
+//   }
+// };
+
+exports.startReading = async (req, res) => {
+  try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Student access only' });
+    }
+    const lessonId = req.params.id;
+    const studentId = req.user.id;
+
+    // Ensure progress row exists
+    await pool.query(
+      `INSERT INTO student_lesson_progress
+         (student_id, lesson_id, reading_status, reading_started_at, lesson_status, last_activity)
+       VALUES (?, ?, 'in_progress', NOW(), 'reading_required', NOW())
+       ON DUPLICATE KEY UPDATE
+         reading_started_at = IFNULL(reading_started_at, NOW()),
+         reading_status = IF(reading_status = 'not_started', 'in_progress', reading_status),
+         last_activity = NOW()`,
+      [studentId, lessonId]
+    );
+
+    // Return current accumulated time so the frontend can display it
+    const [rows] = await pool.query(
+      `SELECT reading_status, reading_time_spent
+       FROM student_lesson_progress
+       WHERE student_id = ? AND lesson_id = ?`,
+      [studentId, lessonId]
+    );
+
+    res.json({
+      success: true,
+      reading_status: rows[0]?.reading_status || 'in_progress',
+      reading_time_spent: rows[0]?.reading_time_spent || 0
+    });
+  } catch (err) {
+    console.error('startReading error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.pauseReading = async (req, res) => {
+  try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Student access only' });
+    }
+    const lessonId = req.params.id;
+    const studentId = req.user.id;
+    const seconds = Math.max(0, Math.min(3600, Number(req.body.seconds) || 0)); // cap at 1 hour per flush
+
+    if (seconds === 0) {
+      return res.json({ success: true, added: 0 });
+    }
+
+    await pool.query(
+      `UPDATE student_lesson_progress
+       SET reading_time_spent = reading_time_spent + ?,
+           last_activity = NOW()
+       WHERE student_id = ? AND lesson_id = ?`,
+      [seconds, studentId, lessonId]
+    );
+
+    res.json({ success: true, added: seconds });
+  } catch (err) {
+    console.error('pauseReading error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.markReadingComplete = async (req, res) => {
+  try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Student access only' });
+    }
+    const lessonId = req.params.id;
+    const studentId = req.user.id;
+    const extraSeconds = Math.max(0, Math.min(3600, Number(req.body.seconds) || 0));
+
+    const [rows] = await pool.query(
+      `SELECT reading_status FROM student_lesson_progress
+       WHERE student_id = ? AND lesson_id = ?`,
+      [studentId, lessonId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Progress row not found' });
+    }
+
+    if (rows[0].reading_status === 'completed') {
+      return res.json({ success: true, already_completed: true });
+    }
+
+    await pool.query(
+      `UPDATE student_lesson_progress
+       SET reading_status = 'completed',
+           reading_completed_at = NOW(),
+           reading_time_spent = reading_time_spent + ?,
+           reading_progress = 100.00,
+           last_activity = NOW()
+       WHERE student_id = ? AND lesson_id = ?`,
+      [extraSeconds, studentId, lessonId]
+    );
+
+    res.json({ success: true, seconds_added: extraSeconds });
+  } catch (err) {
+    console.error('markReadingComplete error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };

@@ -4,96 +4,203 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quiz — SSEGL</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/shared.css">
+  
   <style>
-    body { display: block; padding: 40px 20px; }
-    .quiz-container {
-      max-width: 700px;
+    /* Main Quiz Container */
+    .quiz-wrapper {
+      max-width: 800px;
       margin: 0 auto;
       background: white;
-      border-radius: 12px;
+      border-radius: 16px;
       padding: 40px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+      border: 1px solid var(--border-color);
+      margin-bottom: 40px;
     }
+
+    /* Quiz Header */
     .quiz-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 24px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #f1f5f9;
     }
-    .quiz-header h1 { color: #1e3a8a; font-size: 20px; }
+    
+    .quiz-header h1 { 
+      color: var(--navy); 
+      font-size: 24px; 
+      font-weight: 800; 
+      margin: 0;
+    }
+    
     .timer {
       background: #fee2e2;
       color: #991b1b;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 14px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .timer.warning { background: #fef3c7; color: #92400e; }
+    .timer.warning { background: #fef3c7; color: #92400e; animation: pulse 1s infinite; }
+    
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+
     .question-counter {
-      color: #64748b;
-      font-size: 13px;
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 600;
       margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
+    
     .question-text {
-      font-size: 18px;
-      color: #0f172a;
+      font-size: 20px;
+      color: var(--navy);
+      font-weight: 700;
       margin-bottom: 24px;
       line-height: 1.5;
     }
-    .options { list-style: none; }
+
+    /* Multiple Choice Options */
+    .options { list-style: none; padding: 0; margin: 0; }
     .option {
       display: block;
-      padding: 12px 16px;
-      border: 2px solid #cbd5e1;
-      border-radius: 8px;
-      margin-bottom: 10px;
+      padding: 16px 20px;
+      border: 2px solid var(--border-color);
+      border-radius: 10px;
+      margin-bottom: 12px;
       cursor: pointer;
-      transition: border 0.15s, background 0.15s;
+      transition: all 0.2s ease;
+      font-size: 16px;
+      color: var(--text-main);
     }
-    .option:hover { border-color: #1e3a8a; background: #f0f4ff; }
-    .option.selected { border-color: #1e3a8a; background: #dbeafe; }
+    .option:hover { border-color: var(--primary-blue); background: #f8fafc; }
+    .option.selected { border-color: var(--primary-blue); background: #eff6ff; color: var(--primary-blue); font-weight: 600; }
     .option input { display: none; }
+
+    /* Navigation Buttons */
     .nav-buttons {
       display: flex;
       justify-content: space-between;
-      margin-top: 24px;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid #f1f5f9;
     }
-    .nav-buttons button { width: auto; padding: 10px 24px; }
+    
+    .nav-buttons button {
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    
     .nav-buttons button:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-secondary { background: #94a3b8; }
-    .btn-secondary:hover { background: #64748b; }
-    .result-card {
-      text-align: center;
-    }
+    
+    .btn-secondary { background: #f1f5f9; color: var(--text-main); }
+    .btn-secondary:hover:not(:disabled) { background: #e2e8f0; }
+    
+    .btn-primary { background: var(--primary-blue); color: white; }
+    .btn-primary:hover { background: #1e40af; transform: translateY(-2px); }
+
+    /* Result Screen */
+    .result-card { text-align: center; padding: 40px 0; }
     .result-score {
-      font-size: 56px;
+      font-size: 72px;
       font-weight: 800;
       margin: 16px 0;
+      line-height: 1;
     }
-    .result-score.pass { color: #166534; }
-    .result-score.fail { color: #991b1b; }
-    .result-breakdown { text-align: left; margin-top: 32px; }
+    .result-score.pass { color: #16a34a; }
+    .result-score.fail { color: #dc2626; }
+    
+    .result-breakdown { margin-top: 40px; text-align: left; }
+    .result-breakdown h3 { font-size: 22px; color: var(--navy); margin-bottom: 20px; }
+    
     .result-item {
-      border-left: 4px solid #ccc;
-      padding: 12px 16px;
-      margin-bottom: 12px;
-      border-radius: 4px;
+      border-left: 6px solid #ccc;
+      padding: 20px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     }
     .result-item.correct { border-color: #16a34a; background: #f0fdf4; }
-    .result-item.wrong   { border-color: #dc2626; background: #fef2f2; }
-    .result-item h4 { font-size: 14px; margin-bottom: 8px; color: #0f172a; }
-    .result-item p { font-size: 13px; color: #475569; margin-top: 4px; }
+    .result-item.wrong { border-color: #dc2626; background: #fef2f2; }
+    .result-item h4 { font-size: 16px; margin-bottom: 12px; color: var(--navy); }
+    .result-item p { font-size: 14px; color: #475569; margin-top: 8px; }
   </style>
 </head>
 <body>
 
-  <div class="quiz-container" id="app">
-    Loading...
+  <!-- HEADER -->
+  <header class="header">
+    <div style="display: flex; align-items: center;">
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">☰</div>
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Student&background=1e3a8a&color=fff" alt="Student">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;" id="navUserGrade">Grade --</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- LAYOUT -->
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">Student Panel</div>
+      <div class="nav-links">
+        <a href="/student/dashboard.html">Home</a>
+        <a href="/student/lessons.html">Lessons</a>
+        <a href="/student/final-quizzes.html">Final Quizzes</a>
+        <a href="/student/progress.html">Progress</a>
+        <a href="/student/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content" style="background: var(--bg-light);">
+      
+      <!-- Quiz Container -->
+      <div class="quiz-wrapper" id="app">
+        <div style="text-align: center; padding: 40px; color: var(--text-muted);">Loading Quiz...</div>
+      </div>
+
+    </main>
   </div>
 
-  <script src="/student/quiz.js"></script>
+  <!-- SCRIPTS -->
+  <script src="/js/auth-check.js"></script>
+<script src="/js/header-profile.js"></script>
+<script src="/student/js/quiz-ui.js"></script>            <!-- 1. UI builders -->
+<script src="/student/js/quiz-types/multiple-choice.js"></script>
+<script src="/student/js/quiz-types/text-input.js"></script>
+<script src="/student/js/quiz-types/two-step-choice.js"></script>
+<script src="/student/js/quiz-types/pattern-choice.js"></script>
+<script src="/student/js/quiz-types/sentence-construction.js"></script>
+<script src="/student/js/quiz-router.js"></script>          <!-- 2. Router defines renderQuestion -->
+<script src="/student/quiz.js"></script>                    <!-- 3. Core logic — must be LAST -->
 </body>
 </html>

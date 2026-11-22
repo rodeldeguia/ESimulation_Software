@@ -23,7 +23,7 @@ async function loadDashboard() {
       </div>
       <div class="stat-card">
         <h3>Total Lessons</h3>
-        <div class="value">${stats.total_lessons || 0}</div>
+        <div class="value">${stats.published_lessons || 0}</div>
       </div>
       <div class="stat-card">
         <h3>Quizzes Taken</h3>

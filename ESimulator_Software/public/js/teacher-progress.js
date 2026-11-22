@@ -17,16 +17,26 @@ function switchTab(tabId, element) {
 }
 
 // 2. LOAD STUDENTS DROPDOWN
+// 2. LOAD STUDENTS DROPDOWN
 async function loadStudents() {
   try {
     const res = await fetch('/api/teacher-analytics/students', { headers: { 'Authorization': `Bearer ${token}` } });
     const students = await res.json();
     const select = document.getElementById('studentSelect');
+    
+    // Populate the dropdown
     select.innerHTML = '<option value="">-- Select a Student --</option>' + 
       students.map(s => `<option value="${s.student_id}">${s.full_name} (Grade ${s.grade_level})</option>`).join('');
-  } catch (err) { console.error(err); }
-}
 
+    // 🚨 NEW: Automatically select the first student and load their progress
+    if (students.length > 0) {
+      select.value = students[0].student_id;
+      loadStudentProgress(); // Trigger the data load immediately
+    }
+  } catch (err) { 
+    console.error(err); 
+  }
+}
 // 3. INDIVIDUAL STUDENT PROGRESS
 async function loadStudentProgress() {
   const studentId = document.getElementById('studentSelect').value;

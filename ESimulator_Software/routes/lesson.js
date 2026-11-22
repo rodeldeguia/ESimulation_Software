@@ -12,5 +12,9 @@ router.put('/:id', lessonController.update);
 router.get('/:id/quizzes', lessonController.getQuizzes);
 router.post('/', lessonController.create);
 router.delete('/:id', lessonController.deleteLesson);
+router.post('/:id/reading-complete', authMiddleware, lessonController.markReadingComplete);
+router.post('/:id/reading-start',    authMiddleware, lessonController.startReading);
+router.post('/:id/reading-pause',    authMiddleware, lessonController.pauseReading);
+router.post('/:id/reading-complete', authMiddleware, lessonController.markReadingComplete);
 
 module.exports = router;

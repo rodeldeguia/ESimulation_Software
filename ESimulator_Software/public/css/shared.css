@@ -1,7 +1,7 @@
 /* public/css/shared.css */
 
 :root {
-  --navy: #0f172a;        /* The exact dark blue from your snippet */
+  --navy: #170C79;        /* The exact dark blue from your snippet */
   --navy-light: #1e293b;
   --gold: #fbbf24;
   --bg-light: #f8fafc;
@@ -12,8 +12,10 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
-body { background-color: var(--bg-light); display: flex; min-height: 100vh; flex-direction: column; }
-
+body { background-color: var(--bg-light); display: flex; min-height: 100vh; flex-direction: column;  overflow-y: scroll; }
+html {
+  overflow-y: scroll; /* Forces the scrollbar to always be visible */
+}
 /* ─── HEADER ─── */
 .header { 
   position: fixed;
@@ -29,6 +31,7 @@ body { background-color: var(--bg-light); display: flex; min-height: 100vh; flex
   width: 100%;
   z-index: 100; 
   flex-shrink: 0;
+  border-bottom: 4px solid var(--gold); 
 }
 .header-logo { font-weight: 700; font-size: 16px; line-height: 1.2; color: white; }
 .header-logo span { color: var(--gold); }
@@ -56,6 +59,7 @@ body { background-color: var(--bg-light); display: flex; min-height: 100vh; flex
   font-size: 18px;
   border-bottom: 1px solid var(--navy-light);
   color: #93c5fd;
+  
 }
 .nav-links { padding: 20px 12px; flex-grow: 1; display: flex; flex-direction: column; }
 .nav-links a {
@@ -77,10 +81,25 @@ body { background-color: var(--bg-light); display: flex; min-height: 100vh; flex
   margin-left: 240px;
   height: calc(100vh - 70px);
   overflow-y: auto;
-  padding: 30px;
+  padding: 0 30px 30px 30px;
   flex-grow: 1;
 }
-.page-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 16px; margin-bottom: 24px; flex-wrap: wrap; gap: 15px; }
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid var(--border-color);
+  padding: 24px 0 16px 0;       /* ← top breathing room lives HERE now */
+  margin: 0 0 24px 0;
+  flex-wrap: wrap;
+  gap: 15px;
+  position: sticky;
+  top: 0;
+  background: var(--bg-light);
+  z-index: 10;
+}
+/* .page-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 16px; margin-bottom: 24px; flex-wrap: wrap; gap: 15px;position: sticky;  top: -30px; background: var(--bg-light);z-index: 10;} */
 .page-header h1 { font-size: 28px; color: var(--navy); font-weight: 800; }
 
 /* Grid Layout for Cards */
@@ -149,4 +168,36 @@ tr:last-child td { border-bottom: none; }
     flex: 1;
     padding: 16px;}
   .form-row { flex-direction: column; gap: 15px; }
+}
+
+/* ─── PAGE TRANSITION ANIMATION ─── */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px); /* Starts slightly lower */
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0); /* Slides into place */
+  }
+}
+
+.main-content {
+  /* ... your existing styles for main-content ... */
+  animation: fadeSlideUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Optional: Make the sidebar links feel snappier on hover */
+.nav-links a {
+  transition: all 0.2s ease;
+}
+
+.nav-links a:active {
+  transform: scale(0.96); /* Slight press effect when clicked */
+}
+
+@keyframes fadeBanner {
+  0%   { opacity: 1; transform: translateY(0); }
+  80%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-8px); }
 }
