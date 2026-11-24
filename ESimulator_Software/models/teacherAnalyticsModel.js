@@ -1,10 +1,45 @@
 // models/teacherAnalyticsModel.js
 const pool = require('../config/db');
 
+function parseGradeLevels(input) {
+  if (!input) return [];
+  if (Array.isArray(input)) return input;
+
+  try {
+    // If it's a valid JSON string, parse it
+    const parsed = JSON.parse(input);
+    if (Array.isArray(parsed)) return parsed;
+    return [parsed];
+  } catch (e) {
+    // 🚨 FALLBACK: If JSON.parse fails, assume it's a string like "[7]" or "7"
+    if (typeof input === 'string') {
+      // Remove all brackets and quotes, then split by comma
+      // "[7]" -> "7" -> ["7"]
+      // "[7, 8]" -> "7, 8" -> ["7", "8"]
+      const cleanStr = input.replace(/[\[\]"]/g, '');
+      return cleanStr.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+  }
+}
 module.exports = {
 
   // ─── Get all students with their progress summary ───
-  async getAllStudentsWithProgress() {
+   async getAllStudentsWithProgress(teacherId) {
+    // 1. Get teacher's assigned grades
+    const [teacherRows] = await pool.query('SELECT grade_levels FROM teachers WHERE teacher_id = ?', [teacherId]);
+    
+    let gradeLevels = [];
+    if (teacherRows.length > 0) {
+      gradeLevels = parseGradeLevels(teacherRows[0].grade_levels);
+    }
+
+    // If no grades assigned, return empty array
+    if (gradeLevels.length === 0) return [];
+
+    // 2. Query students only in those grades
+    const placeholders = gradeLevels.map(() => '?').join(',');
+    
     const [rows] = await pool.query(
       `SELECT 
          s.student_id,
@@ -19,10 +54,11 @@ module.exports = {
          MAX(p.last_activity) AS last_activity
        FROM students s
        LEFT JOIN student_lesson_progress p ON p.student_id = s.student_id
+       WHERE s.grade_level IN (${placeholders})
        GROUP BY s.student_id
-       ORDER BY s.full_name`
+       ORDER BY s.full_name`,
+      gradeLevels
     );
-
     return rows.map(r => ({
       student_id: r.student_id,
       username: r.username,

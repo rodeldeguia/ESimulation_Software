@@ -72,7 +72,14 @@ exports.list = async (req, res) => {
 
       }
     } else {
-      lessons = await Lesson.findAll();
+     // 🚨 TEACHER / ADMIN LOGIC
+      if (req.user.role === 'admin') {
+        // Admins see everything
+        lessons = await Lesson.findAll();
+      } else {
+        // Teachers see their own drafts + ALL published lessons
+        lessons = await Lesson.findForTeacher(req.user.id);
+      }
     }
     res.json(lessons);
   } catch (error) {
@@ -83,10 +90,15 @@ exports.list = async (req, res) => {
 
 exports.listWithoutQuiz = async (req, res) => {
   try {
-    const lessons = await Lesson.findLessonWithoutQuiz();
+    const purpose = req.query.purpose || 'final';
+    
+    // 🔥 Pass the teacher's ID (or null for admins to see everything)
+    const teacherId = req.user.role === 'admin' ? null : req.user.id;
+    
+    const lessons = await Lesson.findLessonWithoutQuiz(purpose, teacherId);
     res.json(lessons);
   } catch (error) {
-    console.error(error);
+    console.error('listWithoutQuiz error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
@@ -186,7 +198,7 @@ exports.create = async (req, res) => {
       title,
       description,
       discussion_content,
-      grade_level: JSON.stringify((grade_level)),
+      grade_level: JSON.stringify(grade_level),
       prerequisite_lesson_id: null,
       passing_score: 70.00,
       max_quiz_attempts: 3,
@@ -255,7 +267,7 @@ exports.update = async (req, res) => {
       title,
       description,
       discussion_content: finalContent,
-      grade_level: JSON.stringify([grade_level])
+      grade_level: JSON.stringify(grade_level)
     });
 
     if (!ok) return res.status(404).json({ error: 'Lesson not found or no changes' });
@@ -305,7 +317,10 @@ exports.update = async (req, res) => {
         
         if (req.body.final_quizzes.length > 0) {
           const newType = req.body.final_quizzes[0].type;
-          await pool.query(`UPDATE quizzes SET quiz_type = ? WHERE quiz_id = ?`, [newType, fqId]);
+           
+          if (newType) {
+    await pool.query(`UPDATE quizzes SET quiz_type = ? WHERE quiz_id = ?`, [newType, fqId]);
+  }
           
           for (const q of req.body.final_quizzes) {
             await saveDynamicQuestion(pool, fqId, q.type, q, req.user.id);
@@ -498,6 +513,44 @@ exports.markReadingComplete = async (req, res) => {
     res.json({ success: true, seconds_added: extraSeconds });
   } catch (err) {
     console.error('markReadingComplete error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// controllers/lessonController.js
+
+// controllers/lessonController.js
+
+exports.submitForApproval = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Teacher access only' });
+    }
+
+    const lessonId = req.params.id;
+
+    // Check if the lesson has a final quiz
+    const [quizRows] = await pool.query(
+      "SELECT quiz_id FROM quizzes WHERE lesson_id = ? AND quiz_purpose = 'final'",
+      [lessonId]
+    );
+
+    if (quizRows.length === 0) {
+      return res.status(400).json({ 
+        error: 'You must create a Final Quiz before submitting for approval.' 
+      });
+    }
+
+    // 🚨 Log the submission (This is what the Admin query checks)
+    await pool.query(
+      `INSERT INTO activity_logs (actor_type, actor_id, action, entity_type, entity_id, details)
+       VALUES ('teacher', ?, 'lesson.submit_approval', 'lesson', ?, '{"status":"submitted"}')`,
+      [req.user.id, lessonId]
+    );
+
+    res.json({ message: 'Lesson submitted for approval.' });
+  } catch (err) {
+    console.error('submitForApproval error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };

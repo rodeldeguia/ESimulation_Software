@@ -53,7 +53,7 @@
         <a href="/teacher/quizzes.html">Quizzes</a>
         <a href="/teacher/progress.html">Progress</a>
         <a href="/teacher/analytics.html">Analytics</a>
-        <a href="/teacher/dictionary.html">Grammar Dictionary</a>
+        <!-- <a href="/teacher/dictionary.html">Grammar Dictionary</a> -->
         <a href="/teacher/settings.html">Settings</a>
         <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
       </div>
@@ -67,12 +67,19 @@
       </div>
 
       <!-- Filters -->
-      <div class="tabs" id="gradeTabs">
-        <div class="tab active" onclick="filterLessons('all', this)">All Grades</div>
-        <div class="tab" onclick="filterLessons('7', this)">Grade 7</div>
-        <div class="tab" onclick="filterLessons('8', this)">Grade 8</div>
-        <div class="tab" onclick="filterLessons('9', this)">Grade 9</div>
-        <div class="tab" onclick="filterLessons('10', this)">Grade 10</div>
+           <!-- Filters -->
+      <div class="tabs" id="mainTabs">
+        <div class="tab active" onclick="filterTab('my_lessons', this)">My Contributions</div>
+        <div class="tab" onclick="filterTab('all_published', this)">All Published Lessons</div>
+      </div>
+
+      <!-- Grade Sub-Filters -->
+      <div class="tabs" id="gradeTabs" style="margin-top: -10px; margin-bottom: 24px;">
+        <div class="tab active" onclick="filterGrade('all', this)">All Grades</div>
+        <div class="tab" onclick="filterGrade('7', this)">Grade 7</div>
+        <div class="tab" onclick="filterGrade('8', this)">Grade 8</div>
+        <div class="tab" onclick="filterGrade('9', this)">Grade 9</div>
+        <div class="tab" onclick="filterGrade('10', this)">Grade 10</div>
       </div>
 
       <div class="table-container">
@@ -83,7 +90,9 @@
               <th>Lesson Title</th>
               <th>Grade</th>
               <th>Status</th>
+              <th>Quiz Status</th>
               <th>Actions</th>
+              
             </tr>
           </thead>
           <tbody id="lessonsBody">

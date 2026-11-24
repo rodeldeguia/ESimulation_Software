@@ -8,20 +8,25 @@ module.exports = {
         return rows;
     },
 
-async findLessonWithoutQuiz() {
-  const [rows] = await pool.query(`
-    SELECT l.lesson_id,
-           l.lesson_order,
-           l.title,
-           l.grade_level
+async findLessonWithoutQuiz(purpose = 'final', teacherId = null) {
+  let query = `
+    SELECT l.lesson_id, l.lesson_order, l.title, l.grade_level
     FROM lessons l
     LEFT JOIN quizzes q
-      ON l.lesson_id = q.lesson_id
-      AND q.quiz_purpose = 'final'
+      ON l.lesson_id = q.lesson_id AND q.quiz_purpose = ?
     WHERE q.quiz_id IS NULL
-    ORDER BY l.grade_level, l.lesson_order
-  `);
+  `;
+  const params = [purpose];
 
+  // 🔥 Filter by teacher if provided
+  if (teacherId) {
+    query += ` AND l.teacher_id = ?`;
+    params.push(teacherId);
+  }
+
+  query += ` ORDER BY l.grade_level, l.lesson_order`;
+
+  const [rows] = await pool.query(query, params);
   return rows;
 },
 
@@ -90,7 +95,26 @@ async findByGrade(gradelevel) {
             ]
         );
         return result.affectedRows > 0;
-    }
+    },
+    // models/lessonModel.js
+
+async findForTeacher(teacherId) {
+  const [rows] = await pool.query(
+    `SELECT 
+       l.*, 
+       t.full_name AS teacher_name,
+       COUNT(CASE WHEN q.quiz_purpose = 'pretest' THEN 1 END) AS pretest_count,
+       COUNT(CASE WHEN q.quiz_purpose = 'final' THEN 1 END) AS final_count
+     FROM lessons l
+     JOIN teachers t ON l.teacher_id = t.teacher_id
+     LEFT JOIN quizzes q ON l.lesson_id = q.lesson_id AND q.is_published = 1
+     WHERE (l.is_published = 1) OR (l.teacher_id = ? AND l.is_published = 0)
+     GROUP BY l.lesson_id
+     ORDER BY l.lesson_order ASC, l.created_at DESC`,
+    [teacherId]
+  );
+  return rows;
+}
 
 
 };

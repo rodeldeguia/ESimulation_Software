@@ -15,18 +15,40 @@
       flex-direction: column; 
       padding: 0; 
       overflow: hidden; 
+      position:relative;
       height: 100%; /* Ensure it fills the layout */
     }
     
+ body::before{
+    content:'A4 LESSON PAGE';
+    position:absolute;
+    top:20px;
+    right:20px;
+    color:#94a3b8;
+    font-size:10px;
+    font-weight:bold;
+    letter-spacing:2px;
 
+}
+
+/* body::after{
+    content:'';
+    position:absolute;
+    top:0;
+    bottom:0;
+    right:96px;
+
+    border-right:1px dashed #cbd5e1;
+} */
     /* STICKY HEADER (Fixed at top) */
     .sticky-header {
       background: white;
       padding: 20px 30px;
       border-bottom: 1px solid var(--border-color);
       box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-      z-index: 10;
+      z-index: 50;
       flex-shrink: 0;
+      position: relative;
     }
     
     .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
@@ -34,13 +56,29 @@
     
     /* Collapsible Metadata */
     .meta-panel {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
       background: #f8fafc;
-      padding: 16px;
-      border-radius: 8px;
-      border: 1px solid var(--border-color);
+      padding: 20px 30px;
+      border-bottom: 1px solid var(--border-color);
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+      z-index: 40;
+      
+      /* Animation */
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-10px);
       transition: all 0.3s ease;
     }
-    .meta-panel.collapsed { display: none; }
+
+     .meta-panel.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+    .meta-panel.collapsed { display: block; }
     
     .meta-row { display: grid; grid-template-columns: 2fr 1.5fr; gap: 16px; margin-bottom: 12px; }
     .meta-row:last-child { margin-bottom: 0; }
@@ -66,17 +104,18 @@
     .quick-btn:hover { transform: translateY(-2px); }
 
     /* Editor Container (Scrollable) */
-   .editor-container {
-      flex-grow: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      padding: 20px 30px;
-      background: #f1f5f9;
-      min-height: 0; /* ⬅️ THIS IS THE MAGIC FIX */
-    }
+.editor-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    background: #dce3ea;
+
+    padding-top: 50px;
+    padding-left: 30px;
+    padding-right: 30px;
+    padding-bottom: 30px;
+}
    .editor-card { 
-      background: white; 
+      background: #dce3ea;
       border-radius: 12px; 
       padding: 0; 
       box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); 
@@ -133,6 +172,153 @@
   overflow-y: auto;
 }
 
+
+.document-ruler{
+    height:30px;
+    max-width:850px;
+    margin:auto;
+
+    background:
+      repeating-linear-gradient(
+        to right,
+        #64748b 0px,
+        #64748b 1px,
+        transparent 1px,
+        transparent 20px
+      );
+
+    background-color:white;
+    border:1px solid #d1d5db;
+}
+
+/* =====================================
+   FULLSCREEN MODE
+===================================== */
+
+body.editor-fullscreen .header,
+body.editor-fullscreen .sidebar,
+body.editor-fullscreen .sticky-header,
+body.editor-fullscreen .quick-ribbon,
+body.editor-fullscreen .actions-bar {
+  display: none !important;
+}
+
+body.editor-fullscreen .layout,
+body.editor-fullscreen .main-content,
+body.editor-fullscreen .editor-container {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
+body.editor-fullscreen .editor-card {
+  max-width: 100% !important;
+  border-radius: 0 !important;
+  border: none !important;
+  width: 100% !important;
+  height: 100vh !important;
+}
+
+/* =====================================
+   MAXIMIZE BUTTON
+===================================== */
+
+.editor-card {
+  position: relative;
+}
+
+.editor-toggle-btn {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  z-index: 100;
+  background: var(--primary-blue);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 5px rgba(0,0,0,.2);
+}
+
+.editor-toggle-btn:hover {
+  background: #1e40af;
+}
+
+/* =====================================
+   FLOATING ARROW BUTTON
+===================================== */
+
+#sidebarArrow {
+  display: none;
+  position: fixed;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 45px;
+  height: 70px;
+  border: none;
+  border-radius: 10px;
+  background: var(--navy);
+  color: white;
+  cursor: pointer;
+  font-size: 22px;
+  z-index: 3000;
+  box-shadow: -2px 0 10px rgba(0,0,0,.25);
+  transition: all 0.3s ease;
+}
+
+#sidebarArrow:hover {
+  background: #1e40af;
+}
+
+body.editor-fullscreen #sidebarArrow {
+  display: block;
+}
+
+/* =====================================
+   SLIDING SIDEBAR
+===================================== */
+
+.fullscreen-sidebar {
+  position: fixed;
+  top: 0;
+  right: -280px;
+  width: 280px;
+  height: 100vh;
+  z-index: 2500;
+  transition: right 0.3s ease;
+}
+
+.fullscreen-sidebar.open {
+  right: 0;
+}
+
+.sidebar-panel {
+  width: 280px;
+  height: 100vh;
+  background: white;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  box-shadow: -5px 0 15px rgba(0,0,0,.15);
+}
+
+.sidebar-panel h3 {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  margin-bottom: 5px;
+}
+  
+
     @media (max-width: 900px) {
       .meta-row { grid-template-columns: 1fr; }
       .actions-bar { flex-direction: column; gap: 12px; }
@@ -171,7 +357,7 @@
         <a href="/teacher/quizzes.html">Quizzes</a>
         <a href="/teacher/progress.html">Progress</a>
         <a href="/teacher/analytics.html">Analytics</a>
-        <a href="/teacher/dictionary.html">Grammar Dictionary</a>
+        <!-- <a href="/teacher/dictionary.html">Grammar Dictionary</a> -->
         <a href="/teacher/settings.html">Settings</a>
         <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
       </div>
@@ -227,6 +413,11 @@
       <!-- 3. SCROLLABLE EDITOR -->
       <div class="editor-container">
         <div class="editor-card">
+ <!-- 🚨 MAXIMIZE BUTTON -->
+          <button type="button" class="editor-toggle-btn" id="toggleEditorBtn" onclick="toggleFullscreenEditor()">
+            ⛶ Maximize
+          </button>
+
           <div id="alertBox" class="alert"></div>
           <form id="lessonForm">
             <textarea id="discussion_content"></textarea>
@@ -312,20 +503,130 @@
     </div>
   </div>
 
+    <!-- ... quizModal is here ... -->
+
+  <!-- ========== SLIDING RIGHT SIDEBAR (ONLY FULLSCREEN) ========== -->
+  <div class="fullscreen-sidebar">
+
+    
+    <div class="sidebar-panel" id="fullscreenSidebarPanel">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin:0; border:none; padding:0;">Tools</h3>
+        <button type="button" onclick="toggleFullscreenEditor()" style="background:none; border:none; font-size:20px; cursor:pointer;">❐</button>
+      </div>
+
+      <!-- Insert Colored Boxes -->
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <h3>Insert Box</h3>
+        <button type="button" class="quick-btn" style="background:#2196F3; color:white; text-align:left;" onclick="insertColoredBox('blue')">🔵 Blue Box</button>
+        <button type="button" class="quick-btn" style="background:#4CAF50; color:white; text-align:left;" onclick="insertColoredBox('green')">🟢 Green Tip</button>
+        <button type="button" class="quick-btn" style="background:#FF9800; color:white; text-align:left;" onclick="insertColoredBox('yellow')">🟡 Warning</button>
+        <button type="button" class="quick-btn" style="background:#764ba2; color:white; text-align:left;" onclick="insertColoredBox('example')">📖 Example</button>
+        <button type="button" class="quick-btn" style="background:#f44336; color:white; text-align:left;" onclick="insertColoredBox('red')">🔴 Important</button>
+      </div>
+
+      <!-- Actions -->
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: auto;">
+        <h3>Actions</h3>
+        <button type="button" onclick="openPreTestModal()" style="background:#8b5cf6; color:white; padding:10px; border:none; border-radius:6px; cursor:pointer; font-weight:600;">
+          🎯 Pre-Test
+        </button>
+        <button type="button" onclick="previewLesson()" class="btn" style="background:#2196F3; color:white; padding:10px;">
+          👁️ Preview
+        </button>
+        <button type="submit" form="lessonForm" class="btn btn-primary" style="padding:10px;">
+          💾 Save Lesson
+        </button>
+      </div>
+    </div>
+  </div>
+
+
   <script src="/js/auth-check.js"></script>
   <script src="/js/header-profile.js"></script>
   <script src="/tinymce/tinymce.min.js"></script>
   <script src="/js/lesson-editor-init.js"></script>
   <script src="/teacher/lesson-editor.js"></script>
   
-  <script>
-    // Toggle Metadata Panel (Collapse/Expand)
-    function toggleMeta() {
+    <script>
+    // 1. Toggle Metadata Panel
+    
+      function toggleMeta() {
       const panel = document.getElementById('metaPanel');
       const btn = event.target;
-      panel.classList.toggle('collapsed');
-      btn.textContent = panel.classList.contains('collapsed') ? '▶ Show Details' : '▼ Hide Details';
+      
+      // Toggle the 'show' class
+      panel.classList.toggle('show');
+      
+      // Update button text based on the new state
+      if (panel.classList.contains('show')) {
+        btn.textContent = '▼ Hide Details';
+      } else {
+        btn.textContent = '▶ Show Details';
+      }
     }
+    // 2. Toggle Fullscreen Editor
+  function toggleFullscreenEditor() {
+  const body = document.body;
+  body.classList.toggle('editor-fullscreen');
+
+  const btn = document.getElementById('toggleEditorBtn');
+  const sidebar = document.querySelector('.fullscreen-sidebar');
+  const arrow = document.getElementById('sidebarArrow');
+
+  if (body.classList.contains('editor-fullscreen')) {
+    btn.innerHTML = '🗗 Minimize';
+  } else {
+    btn.innerHTML = '⛶ Maximize';
+
+    sidebar.classList.remove('open');
+    arrow.innerHTML = '◀';
+  }
+}
+
+    // 3. Toggle the sliding right sidebar
+  function toggleSidebar() {
+  const sidebar = document.querySelector('.fullscreen-sidebar');
+  const arrow = document.getElementById('sidebarArrow');
+
+  sidebar.classList.toggle('open');
+
+  if (sidebar.classList.contains('open')) {
+    arrow.innerHTML = '▶';
+  } else {
+    arrow.innerHTML = '◀';
+  }
+}
+
+    // 🚨 4. NEW: Validate Title before Saving
+    document.getElementById('lessonForm').addEventListener('submit', function(e) {
+      const titleInput = document.getElementById('title');
+      if (!titleInput.value.trim()) {
+        e.preventDefault(); // Stop the form from submitting
+        alert('⚠️ Please enter a Lesson Title before saving.');
+        
+        // If we are in fullscreen, exit it so the teacher can see the title input
+        if (document.body.classList.contains('editor-fullscreen')) {
+          toggleFullscreenEditor(); 
+        }
+        
+        // Scroll to the top and highlight the title input
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        titleInput.focus();
+        titleInput.style.borderColor = '#dc2626'; // Red border
+        titleInput.style.boxShadow = '0 0 0 3px rgba(220, 38, 38, 0.2)';
+        
+        // Remove the red highlight after 3 seconds
+        setTimeout(() => {
+          titleInput.style.borderColor = 'var(--border-color)';
+          titleInput.style.boxShadow = 'none';
+        }, 3000);
+      }
+    });
   </script>
+
+  <button id="sidebarArrow" onclick="toggleSidebar()">
+  ◀
+</button>
 </body>
 </html>

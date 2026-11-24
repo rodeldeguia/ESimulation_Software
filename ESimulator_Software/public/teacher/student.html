@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Progress — SSEGL</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="/css/shared.css">
+  
+  <style>
+    /* Page Layout */
+    .progress-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; }
+    @media (max-width: 1000px) { .progress-layout { grid-template-columns: 1fr; } }
+
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: white; border-radius: 12px; padding: 20px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); text-align: center; }
+    .stat-card .num { font-size: 28px; font-weight: 800; color: var(--navy); margin-bottom: 4px; }
+    .stat-card .label { font-size: 13px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    
+    /* Table */
+    .table-container { background: white; border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { padding: 14px 16px; background: #f8fafc; font-size: 12px; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border-color); font-weight: 700; }
+    td { padding: 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: var(--text-main); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    /* Progress Bars */
+    .progress-wrapper { display: flex; align-items: center; gap: 12px; }
+    .progress-bar { height: 8px; background: #e2e8f0; border-radius: 4px; width: 100px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; }
+    .fill-green { background-color: #16a34a; }
+    .fill-red { background-color: #dc2626; }
+    .fill-blue { background-color: #3b82f6; }
+
+    /* Charts */
+    .chart-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid var(--border-color); margin-bottom: 24px; }
+    .chart-card h3 { font-size: 15px; color: var(--navy); margin-bottom: 16px; text-align: center; font-weight: 700; }
+    .chart-container { position: relative; height: 200px; width: 100%; }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div style="display: flex; align-items: center;">
+      <div class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('active')">☰</div>
+      <div class="header-logo">English Grammar<br><span>Lessons</span></div>
+    </div>
+    <div class="header-search">
+      <svg width="16" height="16" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+      <input type="text" placeholder="Search here...">
+    </div>
+    <div class="header-user">
+      <img id="headerProfilePic" src="https://ui-avatars.com/api/?name=Teacher&background=1e3a8a&color=fff" alt="Teacher">
+      <div>
+        <div style="font-weight: 600;" id="navUserName">Loading...</div>
+        <div style="font-size: 12px; color: #94a3b8;">Teacher</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">Teacher Panel</div>
+      <div class="nav-links">
+        <a href="/teacher/dashboard.html">Dashboard</a>
+        <a href="/teacher/students.html">Students</a>
+        <a href="/teacher/lessons.html">Lessons</a>
+        <a href="/teacher/quizzes.html">Quizzes</a>
+        <a href="/teacher/progress.html" class="active">Progress</a>
+        <a href="/teacher/analytics.html">Analytics</a>
+        <a href="/teacher/dictionary.html">Grammar Dictionary</a>
+        <a href="/teacher/settings.html">Settings</a>
+        <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header" style="margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <a href="/teacher/students.html" class="btn" style="background: white; border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 8px; text-decoration: none; color: var(--navy); font-weight: 600;">← Back to Students</a>
+          <h1 id="studentName" style="margin: 0;">Loading...</h1>
+        </div>
+      </div>
+
+      <div class="progress-layout">
+        <!-- LEFT COLUMN: Stats & Table -->
+        <div>
+          <!-- Stats -->
+          <div class="stats-grid" id="individualStats">
+            <div class="stat-card"><div class="num">-</div><div class="label">Loading...</div></div>
+          </div>
+
+          <!-- Lesson Table -->
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Lesson</th>
+                  <th>Attempts</th>
+                  <th>Avg. Correct</th>
+                  <th>Avg. Incorrect</th>
+                  <th>Best Score</th>
+                  <th>Last Activity</th>
+                </tr>
+              </thead>
+              <tbody id="individualTableBody">
+                <tr><td colspan="6" style="text-align:center; padding: 40px; color: var(--text-muted);">Loading student data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Charts -->
+        <div>
+          <div class="chart-card">
+            <h3>Quiz Performance</h3>
+            <div class="chart-container">
+              <canvas id="performanceChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/js/auth-check.js"></script>
+  <script src="/js/header-profile.js"></script>
+  <script src="/js/teacher-student-detail.js"></script>
+</body>
+</html>

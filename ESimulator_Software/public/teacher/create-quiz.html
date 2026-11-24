@@ -59,7 +59,7 @@
         <a href="/teacher/quizzes.html" class="active">Quizzes</a>
         <a href="/teacher/progress.html">Progress</a>
         <a href="/teacher/analytics.html">Analytics</a>
-        <a href="/teacher/dictionary.html">Grammar Dictionary</a>
+        <!-- <a href="/teacher/dictionary.html">Grammar Dictionary</a> -->
         <a href="/teacher/settings.html">Settings</a>
         <a href="#" class="logout-btn" id="logoutBtn">Log Out</a>
       </div>
@@ -100,6 +100,19 @@
             <label>Quiz Title</label>
             <input type="text" id="title" required placeholder="e.g., Prepositions Final Exam">
           </div>
+
+                      <!-- ... existing Title and Lesson inputs ... -->
+
+            <!-- 🚨 ADD THIS HERE -->
+            <div class="form-group">
+              <label>Quiz Purpose</label>
+              <select id="quizPurpose" required>
+                <!-- <option value="pretest">Pre-Test (Assessment before lesson)</option> -->
+                <option value="final">Final Quiz (Assessment after lesson)</option>
+              </select>
+            </div>
+
+            <!-- ... existing Description, Time Limit, Passing Score inputs ... -->
 
           <div class="form-grid">
             <div class="form-group" style="margin-bottom: 0;">

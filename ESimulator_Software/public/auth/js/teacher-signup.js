@@ -9,6 +9,14 @@ function showmessage(text,type){
 }
 
 form.addEventListener('submit', async (e) => {
+
+        const selectedGrades = Array.from(document.querySelectorAll('.grade-check:checked')).map(cb => cb.value);
+    
+    if (selectedGrades.length === 0) {
+        showmessage('Please select at least one grade level to teach.', 'error');
+        return;
+    }
+
     e.preventDefault();
 
     const payload = {
@@ -17,7 +25,8 @@ form.addEventListener('submit', async (e) => {
         full_name : document.getElementById('full_name').value.trim(),
         department : document.getElementById('department').value.trim() || null,
         specialization : document.getElementById('specialization').value.trim() || null,
-        contact_number : document.getElementById('contact_number').value.trim() || null
+        contact_number : document.getElementById('contact_number').value.trim() || null,
+        grade_levels: selectedGrades
 
     };
 

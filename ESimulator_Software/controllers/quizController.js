@@ -713,7 +713,7 @@ exports.createQuiz = async (req, res) => {
 
     const { 
       lesson_id, quiz_type, quiz_purpose, title, description,
-      passing_score, time_limit, max_quiz_attempts, questions_per_quiz 
+      passing_score, time_limit, max_quiz_attempts, questions_per_quiz ,questions
     } = req.body;
 
     if (!lesson_id || !quiz_type || !title) {
@@ -736,6 +736,17 @@ exports.createQuiz = async (req, res) => {
       }
     }
 
+       // 🔥 NEW: Check for existing Pre-Test
+    if (quiz_purpose === 'pretest') {
+      const [existing] = await pool.query(
+        "SELECT quiz_id FROM quizzes WHERE lesson_id = ? AND quiz_purpose = 'pretest'",
+        [lesson_id]
+      );
+      if (existing.length > 0) {
+        return res.status(400).json({ error: 'This lesson already has a Pre-Test. Please edit the existing one instead.' });
+      }
+    }
+
     // 2. Create the new quiz
     const [result] = await pool.query(
       `INSERT INTO quizzes 
@@ -748,6 +759,19 @@ exports.createQuiz = async (req, res) => {
         max_quiz_attempts || 3, questions_per_quiz || 10
       ]
     );
+
+     const newQuizId = result.insertId;
+     
+      if (questions && Array.isArray(questions) && questions.length > 0) {
+      for (const q of questions) {
+        await pool.query(
+          `INSERT INTO preposition_quiz 
+           (quiz_id, question_text, options, correct_option_index, correct_answer, created_by) 
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [newQuizId, q.question_text, JSON.stringify(q.options), q.correct_option_index, q.correct_answer, req.user.id]
+        );
+      }
+    }
 
     res.status(201).json({ quiz: { quiz_id: result.insertId } });
   } catch (err) {
@@ -892,9 +916,13 @@ exports.createEmbeddedQuiz = async (req, res) => {
 
     const { lesson_id, question_text, options, correct_option_index } = req.body;
 
-    if (!lesson_id || !question_text || !options || correct_option_index === undefined) {
+    if ( !question_text || !options || correct_option_index === undefined) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    //  if (!lesson_id ) {
+    //   return res.status(400).json({ error: 'Create a lesson Tittle First' });
+    // }
 
     const [result] = await pool.query(
       `INSERT INTO embedded_quizzes (lesson_id, question_text, options, correct_option_index, created_by) 
@@ -1290,7 +1318,7 @@ exports.listFinalQuizzesForStudent = async (req, res) => {
 
     const studentId = req.user.id;
 
-    // ─── 1. Get the student's grade level ───
+    // 1. Get student grade
     const [studentRows] = await pool.query(
       'SELECT grade_level FROM students WHERE student_id = ?',
       [studentId]
@@ -1298,17 +1326,22 @@ exports.listFinalQuizzesForStudent = async (req, res) => {
     if (studentRows.length === 0) {
       return res.status(404).json({ error: 'Student not found' });
     }
-    const gradeLevel = String(studentRows[0].grade_level);
+    
+    let gradeLevel = studentRows[0].grade_level;
+    // Normalize to clean string ("7" or "7,8")
+    if (typeof gradeLevel === 'object') gradeLevel = String(gradeLevel);
+    const cleanGrade = gradeLevel.replace(/[\[\]"]/g, '').split(',')[0].trim();
 
-    // ─── 2. Fetch all published lessons for this grade with their final quiz + progress ───
-    //    Count of total items comes from the per-type quiz table via the quiz_type.
+    console.log(`Fetching final quizzes for student ${studentId} (Grade: ${cleanGrade})`);
+
+    // 2. Fetch lessons + quizzes (using JSON_CONTAINS for the clean format)
     const [rows] = await pool.query(
       `SELECT
          l.lesson_id,
          l.lesson_order,
          l.title           AS lesson_title,
          l.description     AS lesson_description,
-         l.prerequisite_lesson_id,
+         l.grade_level     AS lesson_grade,
          q.quiz_id,
          q.title           AS quiz_title,
          q.description     AS quiz_description,
@@ -1320,7 +1353,6 @@ exports.listFinalQuizzesForStudent = async (req, res) => {
          slp.final_quiz_status,
          slp.best_quiz_score,
          slp.final_quiz_attempts,
-         slp.lesson_status,
          (SELECT COUNT(*) FROM preposition_quiz       WHERE quiz_id = q.quiz_id) AS prep_count,
          (SELECT COUNT(*) FROM irregular_verb_quiz    WHERE quiz_id = q.quiz_id) AS iv_count,
          (SELECT COUNT(*) FROM clause_quiz            WHERE quiz_id = q.quiz_id) AS clause_count,
@@ -1336,33 +1368,28 @@ exports.listFinalQuizzesForStudent = async (req, res) => {
          ON slp.lesson_id = l.lesson_id
         AND slp.student_id = ?
        WHERE l.is_published = 1
-         AND JSON_CONTAINS(l.grade_level, JSON_QUOTE(?))
+         AND (
+           JSON_CONTAINS(l.grade_level, JSON_QUOTE(?))
+           OR l.grade_level LIKE ?
+         )
        ORDER BY l.lesson_order ASC, l.lesson_id ASC`,
-      [studentId, gradeLevel]
+      [studentId, cleanGrade, `%${cleanGrade}%`]
     );
 
-    // ─── 3. Compute lock/status per row ───
-    //    Rule: quiz N is locked unless quiz N-1 is passed.
-    //    The first final quiz is unlocked if the lesson itself is not locked.
+    console.log(`Found ${rows.length} rows for grade ${cleanGrade}`);
+
+    // 3. Filter and format
     let previousQuizPassed = true;
     const result = rows.map((r) => {
       const finalStatus = r.final_quiz_status || 'locked';
-      const isPassed =
-        finalStatus === 'completed' ||
-        finalStatus === 'passed';
+      const isPassed = (finalStatus === 'completed' || finalStatus === 'passed');
+      const totalItems = r.prep_count || r.iv_count || r.clause_count || r.pv_count || r.sva_count || r.sp_count || 0;
 
-      // Total items — pick whichever type table has a count for this quiz
-      const totalItems =
-        r.prep_count || r.iv_count || r.clause_count ||
-        r.pv_count || r.sva_count || r.sp_count || 0;
-
-      // No final quiz authored for this lesson → skip entirely
       if (!r.quiz_id) {
-        previousQuizPassed = false; // no quiz = next one shouldn't auto-unlock
+        previousQuizPassed = false;
         return null;
       }
 
-      // Determine status
       let status;
       if (!previousQuizPassed) {
         status = 'locked';
@@ -1373,13 +1400,9 @@ exports.listFinalQuizzesForStudent = async (req, res) => {
       } else if (r.final_quiz_attempts > 0 && finalStatus === 'in_progress') {
         status = 'in_progress';
       } else {
-        // Lock the final if the lesson hasn't been read AND requires reading
-        // (your current schema doesn't have a per-lesson require_reading flag,
-        //  so we default to allowing direct attempts for flexibility.)
         status = 'open';
       }
 
-      // Advance the pointer — next quiz unlocks only if this one is passed
       previousQuizPassed = (status === 'passed');
 
       return {
@@ -1401,6 +1424,7 @@ exports.listFinalQuizzesForStudent = async (req, res) => {
       };
     }).filter(Boolean);
 
+    console.log(`Returning ${result.length} final quizzes`);
     res.json({ quizzes: result });
   } catch (err) {
     console.error('listFinalQuizzesForStudent error:', err);

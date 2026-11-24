@@ -8,6 +8,44 @@ if (user.role !== 'teacher' && user.role !== 'admin') {
   window.location.href = '/student/dashboard.html';
 }
 
+
+// Get the logged-in useronst user = JSON.parse(localStorage.getItem('user') || '{}');
+
+let teacherGrades = [];
+if (user.grade_levels) {
+  try {
+    teacherGrades = typeof user.grade_levels === 'string' 
+      ? JSON.parse(user.grade_levels) 
+      : user.grade_levels;
+  } catch (e) {
+    teacherGrades = [];
+  }
+}
+
+// Ensure it's always an array
+if (!Array.isArray(teacherGrades)) {
+  teacherGrades = [teacherGrades];
+}
+
+const gradeContainer = document.getElementById('gradeCheckboxes');
+if (gradeContainer) {
+  gradeContainer.innerHTML = '';
+
+  if (teacherGrades.length === 0) {
+    gradeContainer.innerHTML = '<span style="color:red; font-size:13px;">No grades assigned to your account. Contact Admin.</span>';
+  } else {
+    const gradeNames = { '7': 'Grade 7', '8': 'Grade 8', '9': 'Grade 9', '10': 'Grade 10' };
+    teacherGrades.forEach(g => {
+      if (gradeNames[g]) {
+        gradeContainer.innerHTML += `
+          <label><input type="checkbox" value="${g}"> ${gradeNames[g]}</label>
+        `;
+      }
+    });
+  }
+}
+
+
 const params = new URLSearchParams(window.location.search);
 const lessonId = params.get('id');
 const isEdit = !!lessonId;
@@ -17,6 +55,8 @@ let pendingQuizzes = [];
 
 // 1. Initialize the editor
 initLessonEditor('#discussion_content');
+
+
 
 // 2. Load data if editing
 async function loadLessonData() {
@@ -204,11 +244,45 @@ async function previewLesson() {
       </style>
     </head>
     <body>
-      <h1>${escapeHtml(title)}</h1>
-      ${content}
-      <hr>
-      <p style="color: #999; text-align: center; margin-top: 40px;">📄 Preview — students will see this layout.</p>
-    </body>
+
+<div style="
+    position:sticky;
+    top:0;
+    background:#1e3a8a;
+    padding:15px;
+    margin:-20px -20px 30px -20px;
+    z-index:999;
+">
+    <button
+        onclick="window.close()"
+        style="
+            background:white;
+            color:#1e3a8a;
+            border:none;
+            padding:10px 20px;
+            border-radius:6px;
+            cursor:pointer;
+            font-weight:bold;
+        ">
+        ← close Preview
+    </button>
+</div>
+
+<h1>${escapeHtml(title)}</h1>
+
+${content}
+
+<hr>
+
+<p style="
+    color:#999;
+    text-align:center;
+    margin-top:40px;
+">
+    📄 Preview — students will see this layout.
+</p>
+
+</body>
     </html>
   `);
   win.document.close();
@@ -217,19 +291,19 @@ async function previewLesson() {
 // ═══════════════════════════════════════════════════════
 // PRE-TEST BUILDER LOGIC (THE MISSING PART)
 // ═══════════════════════════════════════════════════════
-function openPreTestModal() {
-  const modal = document.getElementById('preTestModal');
-  if (!modal) {
-    alert("Modal not found in HTML.");
-    return;
-  }
+// function openPreTestModal() {
+//   const modal = document.getElementById('preTestModal');
+//   if (!modal) {
+//     alert("Modal not found in HTML.");
+//     return;
+//   }
   
-  // 🔥 THE MAGIC FIX: Move modal to the body so it escapes the editor container
-  document.body.appendChild(modal); 
+//   // 🔥 THE MAGIC FIX: Move modal to the body so it escapes the editor container
+//   document.body.appendChild(modal); 
   
-  modal.style.display = 'flex';
-  renderModalPreTestList();
-}
+//   modal.style.display = 'flex';
+//   renderModalPreTestList();
+// }
 function closePreTestModal() {
   document.getElementById('preTestModal').style.display = 'none';
 }
@@ -444,12 +518,52 @@ async function saveQuizToLesson() {
 
     // 🔥 2. Insert the placeholder with the REAL ID (matches backend regex)
     const quizHtml = `
-      <div class="embedded-quiz" data-quiz-id="${realQuizId}" contenteditable="false" style="border: 2px dashed #3b82f6; background: #eff6ff; padding: 15px; margin: 20px 0; border-radius: 8px;">
-        <strong>📝 Interactive Quiz (ID: ${realQuizId})</strong><br>
-        <em>Click "Save Lesson" to finalize.</em>
-      </div>
-      <p><br></p>
-    `;
+<div class="embedded-quiz"
+     data-quiz-id="${realQuizId}"
+     contenteditable="false"
+     style="
+        border:2px dashed #3b82f6;
+        background:#eff6ff;
+        padding:15px;
+        margin:20px 0;
+        border-radius:8px;
+     ">
+
+    <strong style="color:#1e3a8a;">
+        📝 Interactive Quiz
+    </strong>
+
+    <p style="margin-top:10px;">
+        <strong>Question:</strong>
+        ${text}
+    </p>
+
+    <ul style="margin-left:20px;">
+        ${options.map(opt => `
+        <li ${
+            opt === correct
+            ? 'style="color:green;font-weight:bold;"'
+            : ''
+        }>
+            ${opt}
+            ${opt === correct ? '✅ Correct Answer' : ''}
+        </li>
+        `).join('')}
+    </ul>
+
+    <div style="
+        margin-top:10px;
+        font-size:12px;
+        color:#64748b;
+    ">
+        Quiz ID: ${realQuizId}
+    </div>
+
+</div>
+
+<p><br></p>
+`;
+
 
     if (window.editorInstance) {
       window.editorInstance.insertContent(quizHtml);
