@@ -16,5 +16,6 @@ router.post('/:id/reading-complete', authMiddleware, lessonController.markReadin
 router.post('/:id/reading-start',    authMiddleware, lessonController.startReading);
 router.post('/:id/reading-pause',    authMiddleware, lessonController.pauseReading);
 router.post('/:id/reading-complete', authMiddleware, lessonController.markReadingComplete);
+router.patch('/:id/submit-approval', lessonController.submitForApproval);
 
 module.exports = router;

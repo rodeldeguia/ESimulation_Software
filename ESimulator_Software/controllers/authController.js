@@ -48,11 +48,10 @@ exports.signupStudent =  async(req,res) => {
 // teacher signup
 exports.signupTeacher = async(req,res) =>{
     try{
-        const {username, password, full_name, department, specialization, contact_number} = req.body;
+        const {username, password, full_name, department, specialization, contact_number, grade_levels} = req.body;
 
-        if(!username || !password || !full_name){
-            return res.status(400).json({error : 'username, password, and fullname are required !!'});
-
+        if(!username || !password || !full_name || !grade_levels || grade_levels.length === 0){
+            return res.status(400).json({error : 'username, password, fullname, and at least one grade level are required !!'});
         }
 
         const existingStudent = await Student.findUsername(username);
@@ -69,19 +68,17 @@ exports.signupTeacher = async(req,res) =>{
             full_name,
             department,
             specialization,
-            contact_number
+            contact_number,
+            grade_levels:JSON.stringify(grade_levels) // Make sure this is passed
         });
 
-    
-        res.status(201).json({message : 'Teacher Created succecfully',
-                                user: newTeacher});
+        res.status(201).json({message : 'Teacher Created successfully', user: newTeacher});
         
     }catch(err){
         console.error('Error in signupTeacher:', err);
         res.status(500).json({error: 'Internal Server Error'});
     }
 }
-
 // login Student
 exports.loginStudent = async(req,res) => {
     try{
@@ -106,7 +103,7 @@ exports.loginStudent = async(req,res) => {
         }
 
         // json web token generator
-        const token = jwt.sign({id: student.student_id,role : 'student',username : student.username},JWt_SECRET,{expiresIn : JWT_EXPIRES})
+        const token = jwt.sign({id: student.student_id,role : 'student',username : student.username, grade_level: student.grade_level},JWt_SECRET,{expiresIn : JWT_EXPIRES})
 
         res.json({
             message: ' Login Succesfully',
@@ -158,7 +155,8 @@ exports.loginTeacher = async (req,res) => {
                 department: teacher.department,
                 specialization:teacher.specialization,
                 contact_number: teacher.contact_number,
-                role: teacher.role
+                role: teacher.role,
+                grade_levels: teacher.grade_levels
 
             }
         })

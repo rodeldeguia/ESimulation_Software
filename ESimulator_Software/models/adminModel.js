@@ -65,26 +65,72 @@ module.exports = {
   },
 
   // ─── Approve lesson ───
-  async approveLesson(lesson_id) {
-  // 1. Find the current highest lesson order for this grade level
-  const [currentMax] = await pool.query(
-    `SELECT lesson_id, MAX(lesson_order) AS max_order 
-     FROM lessons 
-     WHERE is_published = 1 AND lesson_id != ? 
-     GROUP BY lesson_id 
-     ORDER BY max_order DESC LIMIT 1`,
+// models/adminModel.js
+
+// models/adminModel.js
+
+// models/adminModel.js
+
+// models/adminModel.js
+
+// models/adminModel.js
+
+async approveLesson(lesson_id) {
+  // 1. Get the lesson we are approving
+  const [lessonRows] = await pool.query(
+    'SELECT grade_level FROM lessons WHERE lesson_id = ?',
     [lesson_id]
   );
+  if (lessonRows.length === 0) return false;
 
-  let nextOrder = 1;
+  // 2. Parse the grade_level into a clean array of strings (e.g., ["7", "8"])
+  let rawGrade = lessonRows[0].grade_level;
+  let gradeLevels = [];
+  try {
+    const parsed = typeof rawGrade === 'string' ? JSON.parse(rawGrade) : rawGrade;
+    gradeLevels = Array.isArray(parsed) ? parsed.flat(Infinity) : [parsed];
+  } catch (e) {
+    gradeLevels = String(rawGrade).replace(/[\[\]"]/g, '').split(',').map(s => s.trim());
+  }
+  gradeLevels = gradeLevels.map(String).filter(Boolean);
+
+  if (gradeLevels.length === 0) return false;
+
+  // 3. Get ALL published lessons for this grade
+  const [publishedLessons] = await pool.query(
+    'SELECT lesson_id, lesson_order, grade_level FROM lessons WHERE is_published = 1'
+  );
+
+  // 4. Filter in JavaScript to find the max order for this grade
+  let maxOrder = 0;
   let prerequisiteId = null;
 
-  if (currentMax.length > 0) {
-    nextOrder = currentMax[0].max_order + 1;
-    prerequisiteId = currentMax[0].lesson_id;
-  }
+  publishedLessons.forEach(l => {
+    let lGrades = [];
+    try {
+      const parsed = typeof l.grade_level === 'string' ? JSON.parse(l.grade_level) : l.grade_level;
+      lGrades = Array.isArray(parsed) ? parsed.flat(Infinity) : [parsed];
+    } catch (e) {
+      lGrades = String(l.grade_level).replace(/[\[\]"]/g, '').split(',').map(s => s.trim());
+    }
+    lGrades = lGrades.map(String).filter(Boolean);
 
-  // 2. Update the lesson with the new order and prerequisite
+    // Check if this lesson shares a grade with the one we are approving
+    const sharesGrade = lGrades.some(g => gradeLevels.includes(g));
+
+    if (sharesGrade && l.lesson_id !== lesson_id) {
+      if (Number(l.lesson_order) > maxOrder) {
+        maxOrder = Number(l.lesson_order);
+        prerequisiteId = l.lesson_id;
+      }
+    }
+  });
+
+  const nextOrder = maxOrder + 1;
+
+  console.log(`[APPROVE] Lesson ${lesson_id} | Grades: ${gradeLevels.join(',')} | Next Order: ${nextOrder} | Prereq: ${prerequisiteId}`);
+
+  // 5. Update the lesson
   const [result] = await pool.query(
     `UPDATE lessons
      SET is_published = 1, 
@@ -98,6 +144,25 @@ module.exports = {
   return result.affectedRows > 0;
 },
 
+// models/adminModel.js
+
+async rejectLesson(lesson_id) {
+  // 1. Unpublish
+  const [result] = await pool.query(
+    'UPDATE lessons SET is_published = 0 WHERE lesson_id = ?',
+    [lesson_id]
+  );
+  
+  // 2. Delete the submission log so the teacher can submit again
+  if (result.affectedRows > 0) {
+    await pool.query(
+      "DELETE FROM activity_logs WHERE entity_type = 'lesson' AND entity_id = ? AND action = 'lesson.submit_approval'",
+      [lesson_id]
+    );
+  }
+  
+  return result.affectedRows > 0;
+},
   // ─── Reject/unpublish lesson ───
   async rejectLesson(lesson_id) {
     const [result] = await pool.query(
@@ -108,21 +173,30 @@ module.exports = {
   },
 
   // ─── Pending approval queue ───
-  async getPendingLessons() {
-    const [rows] = await pool.query(
-      `SELECT 
-         l.lesson_id, l.title, l.description, l.discussion_content, l.grade_level, l.lesson_order,
-         l.created_at, l.teacher_id,
-         t.full_name AS teacher_name
-       FROM lessons l
-       LEFT JOIN teachers t ON t.teacher_id = l.teacher_id
-       WHERE l.is_published = 0
-       ORDER BY l.created_at DESC`
-    );
+// models/adminModel.js
 
-    return rows;
-  },
+// models/adminModel.js
 
+async getPendingLessons() {
+  const [rows] = await pool.query(
+    `SELECT 
+       l.*, 
+       t.full_name AS teacher_name,
+       (SELECT COUNT(*) FROM quizzes q WHERE q.lesson_id = l.lesson_id AND q.quiz_purpose = 'final') AS final_quiz_count,
+       (SELECT COUNT(*) FROM quizzes q WHERE q.lesson_id = l.lesson_id AND q.quiz_purpose = 'pretest') AS pretest_count
+     FROM lessons l
+     JOIN teachers t ON l.teacher_id = t.teacher_id
+     WHERE l.is_published = 0 
+       AND EXISTS (
+         SELECT 1 FROM activity_logs al 
+         WHERE al.entity_type = 'lesson' 
+           AND al.entity_id = l.lesson_id 
+           AND al.action = 'lesson.submit_approval'
+       )
+     ORDER BY l.created_at ASC`
+  );
+  return rows;
+},
   // ─── System-wide stats ───
   async getSystemStats() {
     const [rows] = await pool.query(
@@ -144,25 +218,20 @@ module.exports = {
     );
   },
     // ─── Get ALL lessons (for Admin Management) ───
-  async getAllLessons() {
-    const [rows] = await pool.query(
-      `SELECT 
-         l.lesson_id, 
-         l.title, 
-         l.description, 
-         l.discussion_content, 
-         l.grade_level, 
-         l.lesson_order,
-         l.is_published,
-         l.created_at, 
-         l.teacher_id,
-         t.full_name AS teacher_name
-       FROM lessons l
-       LEFT JOIN teachers t ON t.teacher_id = l.teacher_id
-       ORDER BY l.lesson_order ASC` // Order by sequence (1, 2, 3...)
-    );
-    return rows;
-  },
+  // models/adminModel.js
 
+async getAllLessons() {
+  const [rows] = await pool.query(
+    `SELECT 
+       l.*, 
+       t.full_name AS teacher_name,
+       (SELECT COUNT(*) FROM quizzes q WHERE q.lesson_id = l.lesson_id AND q.quiz_purpose = 'final') AS final_quiz_count,
+       (SELECT COUNT(*) FROM quizzes q WHERE q.lesson_id = l.lesson_id AND q.quiz_purpose = 'pretest') AS pretest_count
+     FROM lessons l
+     JOIN teachers t ON l.teacher_id = t.teacher_id
+     ORDER BY l.created_at DESC`
+  );
+  return rows;
+}
 };
 

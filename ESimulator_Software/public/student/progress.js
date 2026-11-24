@@ -4,6 +4,7 @@ const token = localStorage.getItem('token');
 if (!token) window.location.href = '/auth/student-login.html';
 
 let performanceChart = null;
+const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
 
 async function loadProgress() {
   try {
@@ -18,15 +19,17 @@ async function loadProgress() {
     }
 
     const data = await res.json();
+    console.log('Student grade:', storedUser.grade_level);
+  console.log('Lessons returned:', data.lessons.map(l => l.lesson_order + '. ' + l.title));
     
-    // We are using the data you showed in the screenshot
-    // If your API doesn't return these exact numbers, we fall back to dummy data for the UI
-    const totalQuizzes = data.summary.quizzes_taken || 5;
-    const totalAttempts = data.summary.attempts || 6;
+    // Extract real data from the backend
+    const totalQuizzes = data.summary.total_quizzes || 0;
+    const totalAttempts = data.summary.attempts || 0;
+    const avgCorrect = data.summary.avg_correct || 0;
+    const avgIncorrect = data.summary.avg_incorrect || 0;
     
-    // Calculate percentages for the cards
-    const avgCorrect = data.summary.avg_correct || 76;
-    const avgIncorrect = data.summary.avg_incorrect || 24;
+    const correctAnswers = data.summary.correct_answers || 0;
+    const incorrectAnswers = data.summary.incorrect_answers || 0;
 
     // ─── 1. Render Stat Cards ───
     document.getElementById('summary').innerHTML = `
@@ -58,7 +61,6 @@ async function loadProgress() {
 
     listContainer.innerHTML = data.lessons.map((l, index) => {
       const isLocked = l.status === 'locked';
-      const isPassed = l.status === 'passed' || l.status === 'final_available' || l.status === 'reading_required';
       
       // Determine which layout to show based on status
       if (isLocked) {
@@ -101,9 +103,6 @@ async function loadProgress() {
     }).join('');
 
     // ─── 3. Render Doughnut Chart ───
-    const correctAnswers = 24; // Replace with actual data: data.summary.correct_answers
-    const incorrectAnswers = 6; // Replace with actual data: data.summary.incorrect_answers
-    
     document.getElementById('chartCenterNum').textContent = correctAnswers;
     document.getElementById('legendCorrect').textContent = `${correctAnswers} Correct Answers`;
     document.getElementById('legendIncorrect').textContent = `${incorrectAnswers} Incorrect Answers`;
@@ -150,7 +149,7 @@ if (logoutBtn) {
   logoutBtn.addEventListener('click', (e) => {
     e.preventDefault();
     localStorage.clear();
-    window.location.href = '/auth/student-login.html';
+    window.location.href = '/index.html';
   });
 }
 

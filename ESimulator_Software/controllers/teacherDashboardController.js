@@ -51,6 +51,7 @@ exports.getClassProgress = async (req, res) => {
 exports.getLessonStats = async (req, res) => {
   if (!requireTeacher(req, res)) return;
   try {
+     console.log('getLessonStats called with teacherId:', req.user.id); 
     const stats = await TeacherStats.getLessonStats(req.user.id);
     res.json(stats);
   } catch (err) {

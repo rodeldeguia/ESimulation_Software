@@ -1,4 +1,5 @@
 // controllers/adminController.js
+const pool = require('../config/db');
 const Admin = require('../models/adminModel');
 const Log   = require('../models/activityLogModel');
 
@@ -154,27 +155,72 @@ exports.getPendingLessons = async (req, res) => {
   }
 };
 
+// controllers/adminController.js
+
+// controllers/adminController.js
+
+// controllers/adminController.js
+
 exports.approveLesson = async (req, res) => {
   if (!requireAdmin(req, res)) return;
   try {
-    const ok = await Admin.approveLesson(req.params.id);
-    if (!ok) {
-      return res.status(404).json({ error: 'Lesson not found or already published' });
+    const lessonId = req.params.id;
+
+    // 1. Fetch the lesson to get its grade_level
+    const [lessonRows] = await pool.query(
+      'SELECT grade_level FROM lessons WHERE lesson_id = ?',
+      [lessonId]
+    );
+    if (lessonRows.length === 0) {
+      return res.status(404).json({ error: 'Lesson not found' });
     }
 
-    await Log.log({
-      actor_type: 'teacher',
-      actor_id: req.user.id,
-      action: 'lesson.approve',
-      entity_type: 'lesson',
-      entity_id: Number(req.params.id),
-      ...getClientMeta(req)
-    });
+    // 2. Parse grade_level safely
+    let rawGrade = lessonRows[0].grade_level;
+    let gradeLevels = [];
+
+    try {
+      const parsed = typeof rawGrade === 'string' ? JSON.parse(rawGrade) : rawGrade;
+      if (Array.isArray(parsed)) {
+        gradeLevels = parsed.flat(Infinity); 
+      } else {
+        gradeLevels = [parsed];
+      }
+    } catch (e) {
+      gradeLevels = String(rawGrade).replace(/[\[\]"]/g, '').split(',').map(s => s.trim());
+    }
+
+    const primaryGrade = gradeLevels[0]; // Use the first grade to sequence
+
+    if (!primaryGrade) {
+      return res.status(400).json({ error: 'Lesson has no grade level defined' });
+    }
+
+    // 3. Call the Model to approve and assign order/prerequisite
+    const ok = await Admin.approveLesson(lessonId, primaryGrade);
+
+    if (!ok) {
+      return res.status(400).json({ error: 'Lesson not found or already approved' });
+    }
+
+    // 4. Log the action
+    try {
+      await Log.log({
+        actor_type: 'teacher',
+        actor_id: req.user.id,
+        action: 'lesson.approve',
+        entity_type: 'lesson',
+        entity_id: Number(lessonId),
+        ...getClientMeta(req)
+      });
+    } catch (logErr) {
+      console.warn("Logging failed but approval succeeded", logErr);
+    }
 
     res.json({ message: 'Lesson approved and published' });
   } catch (err) {
     console.error('approveLesson error:', err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error: ' + err.message });
   }
 };
 

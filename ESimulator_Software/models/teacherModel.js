@@ -7,18 +7,12 @@ module.exports ={
         return rows[0] || null;
     },
 
-    async create({ username, password_hash, full_name,department,specialization,contact_number,role}){
-        const [result] = await pool.query('INSERT INTO teachers (username,password_hash,full_name,department,specialization,contact_number,role) VALUES (?, ?, ? , ?, ?, ?, ?)',
-                                                                [username,password_hash,full_name,department,specialization,contact_number,role || 'teacher']);
-
-    return {
-        teacher_id : result.insertId,
-        username,
-        full_name,
-        department,
-        specialization,
-        contact_number,
-        role: role || 'teacher'
-    };
+async create({ username, password_hash, full_name, department, specialization, contact_number, grade_levels }) {
+    const [result] = await pool.query(
+        `INSERT INTO teachers (username, password_hash, full_name, department, specialization, contact_number, grade_levels) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [username, password_hash, full_name, department || null, specialization || null, contact_number || null, grade_levels|| null]
+    );
+    return result.insertId;
 }
 };

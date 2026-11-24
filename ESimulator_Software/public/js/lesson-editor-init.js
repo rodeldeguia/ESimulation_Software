@@ -1,7 +1,39 @@
 // public/js/lesson-editor-init.js
 
 const LESSON_CONTENT_STYLE = `
-  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 16px; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 20px; }
+
+
+
+
+html{
+    background:#d6dce5;
+    padding:40px 0;
+}
+
+body{
+    width:8.27in;
+    min-height:11.69in;
+
+    margin:40px auto;
+
+    padding-top:30px;
+    padding-right:80px;
+    padding-bottom:80px;
+    padding-left:80px;
+
+    background:#fff;
+
+    border:1px solid #d1d5db;
+
+    box-shadow:
+       0 2px 5px rgba(0,0,0,.08),
+       0 12px 40px rgba(0,0,0,.15);
+
+    font-family:Calibri, Arial, sans-serif;
+    font-size:12pt;
+    line-height:1.6;
+}
+
   h1 { color: #2c3e50; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; margin-top: 30px; }
   h2 { color: #34495e; margin-top: 30px; border-left: 4px solid #4CAF50; padding-left: 15px; }
   h3 { color: #555; margin-top: 25px; }
@@ -57,31 +89,66 @@ function initLessonEditor(selector) {
     suffix: '.min',
     license_key: 'gpl',
     menubar: 'file edit view insert format tools table help',
-    plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table help wordcount',
-    toolbar: 'undo redo | blocks | bold italic underline | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | insertquiz | removeformat | code | help',
-    toolbar_mode: 'floating',
+
+    toolbar:
+'undo redo | ' +
+'fontfamily fontsize blocks | ' +
+'bold italic underline strikethrough | ' +
+'forecolor backcolor | ' +
+'alignleft aligncenter alignright alignjustify | ' +
+'bullist numlist checklist | ' +
+'outdent indent | ' +
+'table image link media | ' +
+'insertquiz | ' +
+'removeformat code fullscreen',
+
+
+font_family_formats:
+'Calibri=Calibri,sans-serif;'+
+'Arial=Arial,sans-serif;'+
+'Times New Roman=times new roman,times;'+
+'Georgia=Georgia,serif;'+
+'Verdana=Verdana,sans-serif;'+
+'Tahoma=Tahoma,sans-serif',
+fontsize_formats:
+'8pt 9pt 10pt 11pt 12pt 14pt 16pt 18pt 20pt 24pt 28pt 32pt 36pt',
+
     block_formats: 'Paragraph=p; Heading 1=h1; Heading 2=h2; Heading 3=h3',
-    content_style: LESSON_CONTENT_STYLE,
+    content_style: LESSON_CONTENT_STYLE,font_size_input_default: '12pt',
     forced_root_block: 'p',
     
     // ⬇️ THIS IS THE FIX ⬇️
     // Tell TinyMCE to keep div tags with our specific data attributes
         // Tell TinyMCE to keep divs with ANY data attribute
     extended_valid_elements: 'div[class|style|data-*],p[style|class],span[class|style]',
-    
-    setup: function (editor) {
-      editor.on('init', function () {
-        window.editorInstance = editor;
-      });
 
-      editor.ui.registry.addButton('insertquiz', {
+
+    
+   setup: function (editor) {
+
+    editor.on('init', () => {
+
+        window.editorInstance = editor;
+
+        editor.execCommand(
+            'FontName',
+            false,
+            'Calibri'
+        );
+
+        console.log('TinyMCE loaded successfully');
+    });
+
+    editor.ui.registry.addButton('insertquiz', {
         text: '📝 Insert Quiz',
         tooltip: 'Add an interactive quiz to this lesson',
         onAction: function () {
-          openQuizModal();
+            openQuizModal();
         }
-      });
+    });
     }
+
+    
   });
 }
 

@@ -121,51 +121,134 @@ async function loadClassProgress() {
 
 // 5. LESSON ANALYTICS
 async function loadLessonStats() {
+  // 🔥 Define the tbody variable FIRST
   const tbody = document.getElementById('lessonTableBody');
-  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Loading...</td></tr>';
 
   try {
-    const res = await fetch('/api/teacher/lesson-stats', { headers: { 'Authorization': `Bearer ${token}` } });
-    const lessons = await res.json();
-
+    const res = await fetch('/api/teacher/lesson-stats', { 
+      headers: { 'Authorization': `Bearer ${token}` } 
+    });
+    
+    if (!res.ok) throw new Error('Failed to load lesson stats');
+    const data = await res.json();
+    
+    // 🔥 Ensure it's an array
+    const lessons = Array.isArray(data) ? data : [];
+    
+    if (lessons.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No lesson stats available.</td></tr>';
+      return;
+    }
+    
+    // 🔥 Render the actual rows
     tbody.innerHTML = lessons.map(l => `
       <tr>
-        <td><strong>${l.title}</strong></td>
-        <td>${l.total_attempts}</td>
-        <td>${l.pass_rate}%</td>
-        <td>${l.class_average}%</td>
+        <td style="font-weight:600; color:var(--navy);">${l.title}</td>
+        <td>${l.total_attempts || 0}</td>
+        <td>
+          <div class="progress-wrapper">
+            <div class="progress-bar">
+              <div class="progress-fill fill-green" style="width:${l.pass_rate || 0}%"></div>
+            </div>
+            ${l.pass_rate || 0}%
+          </div>
+        </td>
+        <td>
+          <div class="progress-wrapper">
+            <div class="progress-bar">
+              <div class="progress-fill fill-blue" style="width:${l.class_average || 0}%"></div>
+            </div>
+            ${l.class_average || 0}%
+          </div>
+        </td>
       </tr>
     `).join('');
-  } catch (err) { console.error(err); }
+    
+  } catch (err) {
+    console.error(err);
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">Error loading lesson stats.</td></tr>';
+  }
 }
 
 // Chart rendering (Same as your previous code)
+// Chart rendering
 function renderCharts(data) {
   if (barChart) barChart.destroy();
   if (lineChart) lineChart.destroy();
   if (doughnutChart) doughnutChart.destroy();
 
-  const lessons = data.lessons.filter(l => l.status !== 'locked');
-  const labels = lessons.map(l => l.title);
-  const scores = lessons.map(l => l.best_score || 0);
+  // ─── 1. BAR CHART (Best Score per Lesson) ───
+  const activeLessons = data.lessons.filter(l => l.status !== 'locked');
+  const barLabels = activeLessons.map(l => l.title);
+  const barScores = activeLessons.map(l => l.best_score || 0);
 
   barChart = new Chart(document.getElementById('barChart'), {
     type: 'bar',
-    data: { labels, datasets: [{ label: 'Best Score (%)', data: scores, backgroundColor: '#3b82f6', borderRadius: 4 }] },
+    data: { 
+      labels: barLabels, 
+      datasets: [{ label: 'Best Score (%)', data: barScores, backgroundColor: '#3b82f6', borderRadius: 4 }] 
+    },
     options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
   });
 
+  // ─── 2. LINE CHART (Score Improvement Over Time) ───
+  const sessions = data.sessions || [];
+  const recentSessions = sessions.slice(-10); // Take last 10 attempts
+  
+  const lineLabels = recentSessions.map((s, i) => `Attempt ${i + 1}`);
+  const lineScores = recentSessions.map(s => Number(s.score) || 0);
+
+  const finalLabels = lineLabels.length > 0 ? lineLabels : ['No Attempts Yet'];
+  const finalScores = lineScores.length > 0 ? lineScores : [0];
+
   lineChart = new Chart(document.getElementById('lineChart'), {
     type: 'line',
-    data: { labels: ['Attempt 1', 'Attempt 2', 'Attempt 3', 'Attempt 4', 'Attempt 5'], datasets: [{ label: 'Score (%)', data: [40, 55, 70, 85, scores[0] || 90], borderColor: '#16a34a', backgroundColor: 'rgba(22, 163, 74, 0.1)', fill: true, tension: 0.4 }] },
+    data: { 
+      labels: finalLabels, 
+      datasets: [{ 
+        label: 'Score (%)', 
+        data: finalScores, 
+        borderColor: '#16a34a', 
+        backgroundColor: 'rgba(22, 163, 74, 0.1)', 
+        fill: true, 
+        tension: 0.4,
+        pointBackgroundColor: '#16a34a',
+        pointRadius: 4
+      }] 
+    },
     options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } }
   });
 
-  const totalCorrect = data.summary.lessons_passed * 100;
+  // ─── 3. DOUGHNUT CHART (Overall Answer Distribution) ───
+  // 🚨 Now using the real data from the backend!
+  const totalCorrect = data.summary.correct_answers || 0;
+  const totalIncorrect = data.summary.incorrect_answers || 0;
+
   doughnutChart = new Chart(document.getElementById('doughnutChart'), {
     type: 'doughnut',
-    data: { labels: ['Correct', 'Incorrect'], datasets: [{ data: [totalCorrect || 75, 100 - totalCorrect || 25], backgroundColor: ['#16a34a', '#dc2626'], borderWidth: 0 }] },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '70%' }
+    data: { 
+      labels: ['Correct', 'Incorrect'], 
+      datasets: [{ 
+        data: [totalCorrect, totalIncorrect], 
+        backgroundColor: ['#16a34a', '#dc2626'], 
+        borderWidth: 0 
+      }] 
+    },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false, 
+      cutout: '70%',
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return `${context.label}: ${context.raw}`;
+            }
+          }
+        }
+      }
+    }
   });
 }
 

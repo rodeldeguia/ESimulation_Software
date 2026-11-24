@@ -22,3 +22,15 @@ exports.getMyDashboard = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+exports.getMe = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    const student = await Student.findById(studentId);
+    const data = await Analytics.getStudentDashboard(studentId, student.grade_level);
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};

@@ -50,32 +50,67 @@ function switchTab(tab, el) {
 }
 
 // 3. Render the table/cards
+
+// public/js/admin-approvals.js
+
+// public/js/admin-approvals.js
+
 function renderLessons() {
   const list = document.getElementById('lessonsList');
   const gradeFilter = document.getElementById('gradeFilter').value;
 
-  // Filter by Tab status and Grade
   let filtered = allLessons.filter(l => {
     const matchTab = currentTab === 'pending' ? l.is_published === 0 : l.is_published === 1;
-    const matchGrade = gradeFilter === 'all' ? true : String(l.grade_level) === String(gradeFilter);
+    
+    // Grade filter handles both arrays like [7,8] and strings
+    let grades = l.grade_level;
+    if (typeof grades === 'string') {
+      try { grades = JSON.parse(grades); } catch { grades = [grades]; }
+    }
+    if (Array.isArray(grades)) grades = grades.flat(Infinity);
+    else grades = [grades];
+    
+    const matchGrade = gradeFilter === 'all' ? true : grades.map(String).includes(String(gradeFilter));
+
+    // 🚨 NEW: Hide lessons without a final quiz from the Pending tab
+    if (currentTab === 'pending') {
+      const hasFinalQuiz = Number(l.final_quiz_count) > 0;
+      if (!hasFinalQuiz) return false; 
+    }
+
     return matchTab && matchGrade;
   });
 
   if (filtered.length === 0) {
-    list.innerHTML = `<div class="empty-state">No ${currentTab} lessons found.</div>`;
+    list.innerHTML = `<div class="empty-state">No ${currentTab} lessons found (with completed quizzes).</div>`;
     return;
   }
 
   list.innerHTML = filtered.map(l => {
     const isPending = currentTab === 'pending';
+    const hasFinal = Number(l.final_quiz_count) > 0;
+    const hasPreTest = Number(l.pretest_count) > 0;
     
+    let quizStatus = '';
+    if (hasFinal && hasPreTest) quizStatus = '<span style="background:#dcfce7; color:#166534; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">✅ Pre-Test & Final Quiz</span>';
+    else if (hasFinal) quizStatus = '<span style="background:#dcfce7; color:#166534; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">✅ Final Quiz</span>';
+    else if (hasPreTest) quizStatus = '<span style="background:#e0e7ff; color:#3730a3; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">✅ Pre-Test Only</span>';
+    
+    // Format grade display
+    let gradeDisplay = l.grade_level;
+    if (typeof gradeDisplay === 'string') {
+      try { gradeDisplay = JSON.parse(gradeDisplay); } catch {}
+    }
+    if (Array.isArray(gradeDisplay)) gradeDisplay = gradeDisplay.flat(Infinity).join(', ');
+
     return `
       <div class="approval-card">
         <div class="approval-info">
           <h3>${isPending ? '' : '✅ '}${l.lesson_order}. ${l.title}</h3>
           <p class="teacher">👨‍🏫 Created by: ${l.teacher_name || 'Unknown Teacher'}</p>
-          <p>📚 Grade ${l.grade_level} • Order: ${l.lesson_order}</p>
+          <p>📚 Grade ${gradeDisplay} • Order: ${l.lesson_order}</p>
           <p>📝 ${l.description || 'No description provided.'}</p>
+          <div style="margin-top: 10px;">${quizStatus}</div>
         </div>
         <div style="display:flex; flex-direction:column; gap:8px; min-width:140px;">
           <button class="btn btn-view" style="background:var(--navy); color:white;" onclick="viewLesson(${l.lesson_id})">👁️ View</button>

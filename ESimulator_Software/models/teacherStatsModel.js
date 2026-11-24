@@ -1,27 +1,88 @@
 // models/teacherStatsModel.js
 const pool = require('../config/db');
 
+// Helper: Safely parse grade_levels (Handles null, stringified JSON, or array)
+function parseGradeLevels(input) {
+  if (!input) return [];
+  // If it's already an array, return it
+  if (Array.isArray(input)) return input;
+  
+  try {
+    // Try parsing it
+    const parsed = JSON.parse(input);
+    // If the parsed result is an array, return it
+    if (Array.isArray(parsed)) return parsed;
+    // If it's a string or number, wrap it in an array
+    return [parsed];
+  } catch (e) {
+    // If parsing fails, assume it's a comma-separated string or a single value
+    if (typeof input === 'string') {
+      // Remove brackets and quotes, then split by comma
+      return input.replace(/[\[\]"]/g, '').split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+  }
+};
+
 module.exports = {
   // 1. Get Stats for a specific teacher
-  async getTeacherStats(teacherId) {
-    const [rows] = await pool.query(
-      `SELECT
-         (SELECT COUNT(*) FROM lessons WHERE teacher_id = ? AND is_published = 1) AS total_lessons,
-         (SELECT COUNT(*) FROM lessons WHERE teacher_id = ? AND is_published = 0) AS pending_lessons,
-         (SELECT COUNT(*) FROM quizzes WHERE teacher_id = ?) AS total_quizzes,
-         (SELECT COUNT(DISTINCT student_id) FROM student_lesson_progress WHERE lesson_id IN (SELECT lesson_id FROM lessons WHERE teacher_id = ?)) AS total_students
-       `,
-      [teacherId, teacherId, teacherId, teacherId]
-    );
-    
-    const r = rows[0];
-    return {
-      total_lessons: Number(r.total_lessons),
-      pending_lessons: Number(r.pending_lessons),
-      total_quizzes: Number(r.total_quizzes),
-      total_students: Number(r.total_students) || 0
-    };
-  },
+// models/teacherStatsModel.js
+
+async getTeacherStats(teacherId) {
+  // 1. Get teacher's assigned grades (SAFE PARSE)
+  const [teacherRows] = await pool.query('SELECT grade_levels FROM teachers WHERE teacher_id = ?', [teacherId]);
+  
+  let gradeLevels = parseGradeLevels(teacherRows[0]?.grade_levels);
+  if (teacherRows.length > 0 && teacherRows[0].grade_levels) {
+    try {
+      const raw = teacherRows[0].grade_levels;
+      // If it's a string that looks like a JSON array
+      if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+        gradeLevels = JSON.parse(raw);
+      } 
+      // If it's already an array (mysql driver sometimes auto-parses JSON columns)
+      else if (Array.isArray(raw)) {
+        gradeLevels = raw;
+      } 
+      // If it's a single string number
+      else {
+        gradeLevels = [raw];
+      }
+    } catch (e) {
+      console.warn("Could not parse grade_levels, defaulting to empty:", e.message);
+      gradeLevels = [];
+    }
+  }
+
+  // 2. Build the query based on whether gradeLevels exist
+  let studentCountQuery = `(SELECT COUNT(*) FROM students WHERE is_active = 1) AS total_students`;
+  let queryParams = [teacherId, teacherId, teacherId];
+
+  if (gradeLevels.length > 0) {
+    // Build the IN clause (e.g., IN ('7', '8'))
+    const placeholders = gradeLevels.map(() => '?').join(',');
+    studentCountQuery = `(SELECT COUNT(*) FROM students WHERE is_active = 1 AND grade_level IN (${placeholders})) AS total_students`;
+    queryParams.push(...gradeLevels);
+  }
+
+  const [rows] = await pool.query(
+    `SELECT
+       (SELECT COUNT(*) FROM lessons WHERE teacher_id = ? AND is_published = 1) AS total_lessons,
+       (SELECT COUNT(*) FROM lessons WHERE teacher_id = ? AND is_published = 0) AS pending_lessons,
+       (SELECT COUNT(*) FROM quizzes WHERE teacher_id = ?) AS total_quizzes,
+       ${studentCountQuery}
+     `,
+    queryParams
+  );
+  
+  const r = rows[0];
+  return {
+    total_lessons: Number(r.total_lessons),
+    pending_lessons: Number(r.pending_lessons),
+    total_quizzes: Number(r.total_quizzes),
+    total_students: Number(r.total_students) || 0
+  };
+},
 
   // 2. Get Recent Activity
   async getRecentActivity(teacherId) {
@@ -99,5 +160,5 @@ module.exports = {
         class_average: Math.round(r.class_average || 0)
       };
     });
-  }
+  },
 };

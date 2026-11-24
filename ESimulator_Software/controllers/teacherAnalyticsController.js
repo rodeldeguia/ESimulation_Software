@@ -24,7 +24,7 @@ exports.getOverview = async (req, res) => {
 exports.getAllStudents = async (req, res) => {
   if (!requireTeacher(req, res)) return;
   try {
-    const students = await TeacherAnalytics.getAllStudentsWithProgress();
+    const students = await TeacherAnalytics.getAllStudentsWithProgress(req.user.id);
     res.json(students);
   } catch (err) {
     console.error('getAllStudents error:', err);
